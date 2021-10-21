@@ -67,10 +67,10 @@ class PolicyPlayer:
         return self.field.get_value()
 
     def _calc_move(self, policy, eps):
-        avail_actions = torch.nonzero(self.field.get_running_features()[:, -1, ...].ravel()).ravel()
+        avail_actions = torch.nonzero(self.field.get_running_features()[:, -1, ...].view(-1)).view(-1)
         n_actions = len(avail_actions)
 
-        avail_p = policy.ravel()[avail_actions]
+        avail_p = policy.view(-1)[avail_actions]
         argmax_avail_action_idx = random.choice(torch.where(avail_p == avail_p.max(), 1., 0.).nonzero()).item()
 
         if eps > 0:
@@ -152,7 +152,7 @@ def backprop_sa(p_pred, state, action, value, sa2g, m, key_m='running_mean', key
 
     hashable_state = make_state_hashable(state)
 
-    available_actions = np.nonzero(state.ravel() == 0)[0]
+    available_actions = np.nonzero(state.view(-1) == 0)[0]
     for a in available_actions:
         h = hash((hashable_state, a))
         i, j = a // m, a % m

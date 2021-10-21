@@ -6,13 +6,18 @@ from tqdm import trange
 
 from torch.utils.tensorboard import SummaryWriter
 
+from dpipe.io import choose_existing
 from dpipe.torch import save_model_state, load_model_state
 
 from ttt_lib.monte_carlo_es import PolicyNetworkMCES, PolicyPlayer, train_on_policy_monte_carlo_es
 from ttt_lib.field import Field
 
 if __name__ == '__main__':
-    MCES_EXP_PATH = Path('/experiments/borish/RL/ttt/mces')
+
+    MCES_EXP_PATH = choose_existing(
+        Path('/nmnt/x2-hdd/experiments/rl'),
+        Path('/experiments/borish/RL/ttt/mces')
+    )
 
     parser = argparse.ArgumentParser()
 
@@ -33,7 +38,7 @@ if __name__ == '__main__':
     os.makedirs(exp_path, exist_ok=True)
 
     log_dir = exp_path / 'logs'
-    log_dir.makedir()
+    log_dir.mkdir()
 
     logger = SummaryWriter(log_dir=log_dir)
 
