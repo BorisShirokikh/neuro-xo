@@ -1,31 +1,35 @@
+import random
+
 import numpy as np
+from tqdm.notebook import trange
 import torch
 import torch.nn as nn
-from rl_ttt.field import Field
-from rl_ttt.model.torch import optimizer_step
-from torch.nn.functional import binary_cross_entropy
-from tqdm.notebook import trange
-from dpipe.torch import to_np, to_device
-from dpipe.layers import ResBlock2d
 from torch.optim import Adam
+from torch.nn.functional import binary_cross_entropy
+from dpipe.torch import to_device, to_var
+from dpipe.layers import ResBlock2d
 
-from rl_ttt.model.utils import get_running_mean_hash_table, field2state, update_running_mean_hash_table, \
-    sort_and_clear_running_mean_hash_table
+from ttt_lib.utils import get_running_mean_hash_table, update_running_mean_hash_table, \
+    sort_and_clear_running_mean_hash_table, make_state_hashable, augm_spatial
+from ttt_lib.torch import optimizer_step, Bias, MaskedSoftmax
 
 
 class PolicyNetworkMCES(nn.Module):
-    def __init__(self, structure=None, n=10, m=10):
+    def __init__(self, structure=None, n=10, m=10, in_channels=5):
         super().__init__()
+        if structure is None:
+            structure = (16, 32)
+        self.structure = structure
+
         self.n = n
         self.m = m
 
-        if structure is None:
-            structure = (16, 32)
+        self.in_channels = in_channels
 
         n_features = structure[0]
         n_features_policy = structure[1]
         self.model = nn.Sequential(
-            nn.Conv2d(1, n_features, kernel_size=3, padding=1, bias=False),
+            nn.Conv2d(in_channels, n_features, kernel_size=3, padding=1, bias=False),
             nn.ReLU(inplace=True),
             ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
             ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
@@ -33,195 +37,175 @@ class PolicyNetworkMCES(nn.Module):
             # policy head
             nn.Conv2d(n_features, n_features_policy, kernel_size=1, padding=0, bias=False),
             nn.ReLU(inplace=True),
-            nn.Conv2d(n_features_policy, 1, kernel_size=1, padding=0, bias=True),
+            nn.Conv2d(n_features_policy, 1, kernel_size=1, padding=0, bias=False),
             nn.Flatten(),
-            nn.Softmax(dim=1),
+            Bias(n_channels=n * m),
+            # nn.Softmax(dim=1),
         )
+        self.flatten = nn.Flatten()
+        self.masked_softmax = MaskedSoftmax(dim=1)
 
     def forward(self, x):
-        return torch.reshape(self.model(x), shape=(-1, 1, self.n, self.m))
+        return torch.reshape(self.masked_softmax(self.model(x), self.flatten(x[:, -1, ...].unsqueeze(1))),
+                             shape=(-1, 1, self.n, self.m))
 
 
 class PolicyPlayer:
-    def __init__(self, model, field, train_eps=0.1, eval_eps=0.01, device='cpu'):
+    def __init__(self, model, field, eps=0.1, device='cpu'):
         self.model = to_device(model, device=device)
         self.field = field
-        self.train_eps = train_eps
-        self.eval_eps = eval_eps
+        self.eps = eps
         self.device = device
-
-        self.action_id = 1
 
         # fields to slightly speedup computation:
         self.n, self.m = self.field.get_shape()
 
-    def update_field(self, field):
-        self.field.set_state(field=field)
-        self.action_id = 1 if (self.field.get_depth() % 2 == 0) else -1
-
-    def _update_action_id(self):
-        self.action_id = -self.action_id
+        self.eval()
 
     def _forward_action(self, i, j):
-        value = None
-        try:
-            self.field.make_move(i, j, self.action_id)
-        except IndexError:  # from `make_move`: "Accessing already marked cell."
-            value = 0
-        if self.field.check_win(self.action_id):
-            value = 1
-        elif self.field.check_draw():
-            value = 0.5
+        self.field.make_move(i, j)
+        return self.field.get_value()
 
-        self._update_action_id()
+    def _calc_move(self, policy, eps):
+        avail_actions = torch.nonzero(self.field.get_running_features()[:, -1, ...].ravel()).ravel()
+        n_actions = len(avail_actions)
 
-        return value
-
-    def _calc_move(self, p, s, eps):
-        avail_actions = torch.nonzero(s.ravel() == 0).ravel()
-        n_actions = avail_actions.nelement()
-
-        avail_p = p.ravel()[avail_actions]
-        action_idx = avail_p.argmax().item()
+        avail_p = policy.ravel()[avail_actions]
+        argmax_avail_action_idx = random.choice(torch.where(avail_p == avail_p.max(), 1., 0.).nonzero()).item()
 
         if eps > 0:
             soft_p = np.zeros(n_actions) + eps / n_actions
-            soft_p[action_idx] += (1 - eps)
-            action_idx = np.random.choice(np.arange(n_actions), p=soft_p)
+            soft_p[argmax_avail_action_idx] += (1 - eps)
+            argmax_avail_action_idx = np.random.choice(np.arange(n_actions), p=soft_p)
 
-        action = avail_actions[action_idx]
+        action = avail_actions[argmax_avail_action_idx].item()
 
         return action, action // self.m, action % self.m
 
-    def forward_state(self, state):
+    def eval(self):
+        self.model.eval()
+
+    def train(self):
         self.model.train()
-        state = to_device(state[None, None], device=self.field.device)
-        return self.model(state)[0][0]
+
+    def forward(self, x):
+        return self.model(x)
+
+    def forward_state(self, state=None):
+        state = self.field.get_running_features() if state is None else self.field.field2features(field=state)
+        return self.forward(state)[0][0]
 
     def action(self, train=True):
-        eps = self.train_eps if train else self.eval_eps
-        self.model.eval()
+        eps = self.eps if train else 0
 
-        state = to_device(torch.Tensor(self.field.get_state()), device=self.field.device)
-        policy = self.model(state[None, None])[0][0]
+        policy = self.forward_state()
 
-        action, i, j = self._calc_move(p=policy, s=state, eps=eps)
+        action, i, j = self._calc_move(policy=policy, eps=eps)
         value = self._forward_action(i, j)
 
-        return state, policy, action, value
+        return policy, action, value
 
     def manual_action(self, i, j):
-        self.model.eval()
-
-        # compatibility with `act` output:
+        # compatibility with `action` output:
         action = i * self.m + j
-        policy_manual = to_device(torch.zeros(self.n, self.m), device=self.field.device)
+        policy_manual = to_var(np.zeros((self.n, self.m), dtype='float32'), device=self.device)
+        policy_manual[i, j] = 1
 
         value = self._forward_action(i, j)
-        state = to_device(torch.Tensor(self.field.get_state()), device=self.field.device)
 
-        return state, policy_manual, action, value
+        return policy_manual, action, value
 
-    # def forward_states(self, states):
-    #     self.model.train()
-    #     states = to_device(torch.cat([s[None, None] for s in states]), device=self.field.device)
-    #     return self.model(states)
+    def update_field(self, field):
+        self.field.set_state(field=field)
 
 
-def play_game(player, field=None):
+def play_game(player, field=None, train=True, augm=False, return_p=False):
     if field is None:
-        field = np.zeros(player.field.get_shape())
+        field = np.zeros(player.field.get_shape(), dtype='float32')
     player.update_field(field=field)
 
-    s_history = []
-    a_history = []
+    if not train:
+        augm = False
 
+    s_history = []
+    f_history = []
+    a_history = []
+    p_history = []
+
+    player.eval()
     v = None  # v -- value
     while v is None:
-        s, p, a, v = player.action()
-        s_history.append(s)
+        s_history.append(player.field.get_state())
+        f_history.append(player.field.get_features())
+        p, a, v = player.action(train=train)
         a_history.append(a)
+        p_history.append(p)
 
-    return s_history, a_history, v
+        if augm:
+            player.update_field(augm_spatial(player.field.get_state()))
 
-
-def backprop_action_value(field_backward, action, sa2g, value, backward=True, key_m='running_mean'):
-    state = field2state(field_backward)
-    h = hash((state, action))
-    update_running_mean_hash_table(ht=sa2g, h=h, v=value, key_m=key_m)
-
-    if backward:
-        _, m, = field_backward.get_shape()
-        i, j = action // m, action % m
-        field_backward.backward_move(i, j)
-
-    return sa2g[h][key_m]
+    return (f_history, s_history, a_history, v, p_history) if return_p else (f_history, s_history, a_history, v)
 
 
-def develop_state(player, state, real_action, real_g, sa2g):
-    n, m = player.n, player.m
-    p_true = torch.zeros(n, m)
+def backprop_sa(p_pred, state, action, value, sa2g, m, key_m='running_mean', key_n='n'):
+    p_true = torch.zeros_like(p_pred)
 
-    i, j = real_action // m, real_action % m
-    p_true[i, j] = real_g
+    hashable_state = make_state_hashable(state)
 
-    avail_actions = torch.nonzero(state.ravel() == 0).ravel()
+    available_actions = np.nonzero(state.ravel() == 0)[0]
+    for a in available_actions:
+        h = hash((hashable_state, a))
+        i, j = a // m, a % m
 
-    for developed_action in avail_actions:
-        if developed_action != real_action:
+        if a == action:
+            update_running_mean_hash_table(ht=sa2g, h=h, v=value, key_m=key_m, key_n=key_n)
 
-            player.update_field(state)
-            i, j = developed_action // m, developed_action % m
-            player.manual_action(i, j)
+        if sa2g[h][key_n] > 0:
+            p_true[i, j] = sa2g[h][key_m]
+        else:
+            p_true[i, j] = p_pred[i, j]
 
-            s_history, a_history, value = play_game(player=player, field=player.field.get_state())
+    argmax_action = random.choice(torch.where(p_true == p_true.max(), 1., 0.).nonzero())
+    p_true = torch.zeros_like(p_pred)
+    p_true[argmax_action[0], argmax_action[1]] = 1
 
-            field_backward = Field(n=n, m=m, field=player.field.get_state(), device=player.field.device)
-
-            v = value
-            for s, a in zip(s_history[::-1], a_history[::-1]):
-                g = backprop_action_value(field_backward=field_backward, action=a, sa2g=sa2g, value=v)
-                v = 1 - v
-
-            p_true[i, j] = g
-
-    argmax_action = p_true.argmax().item()
-    i, j = argmax_action // m, argmax_action % m
-    p_true = torch.zeros(n, m)
-    p_true[i, j] = 1
-
-    return to_device(p_true, device=player.field.device)
+    return p_true
 
 
-def train_on_policy_monte_carlo_es(player, n_episodes=1000, train_eps=0.1, lr=1e-2,
-                                   hash_expiration_pool=100000):
+def train_on_policy_monte_carlo_es(player, n_episodes=1000, eps=0.1, lr=1e-2, hash_expiration_pool=100000,
+                                   verbose_module=trange, augm=False):
     loss_history = []
     optimizer = Adam(player.model.parameters(), lr=lr)
+    criterion = binary_cross_entropy
 
     sa2g = get_running_mean_hash_table()
 
-    for _ in trange(n_episodes):
-        s_history, a_history, value = play_game(player=player)
+    n, m = player.field.get_shape()
 
-        field = player.field
-        n, m = field.get_shape()
+    for _ in verbose_module(n_episodes):
+        player.eval()
+        f_history, s_history, a_history, value = play_game(player=player, augm=augm)
 
-        field_backward = Field(n=n, m=m, field=field.get_state(), device=field.device)
+        player.train()
+
+        ps_pred = player.forward(to_var(np.concatenate(f_history, axis=0), device=player.device)).squeeze(1)
+        ps_true = []
 
         v = value
-        for s, a in zip(s_history[::-1], a_history[::-1]):
-            g = backprop_action_value(field_backward=field_backward, action=a, sa2g=sa2g, value=v)
-            p_true = develop_state(player, state=s, real_action=a, real_g=g, sa2g=sa2g)
-            p_pred = player.forward_state(s)
-            loss = binary_cross_entropy(p_pred, p_true)
-            optimizer_step(optimizer=optimizer, loss=loss)
-
-            loss_history.append(loss.item())
+        for s, a, p in zip(s_history[::-1], a_history[::-1], torch.flip(ps_pred, dims=(0, ))):
+            p_true = backprop_sa(p_pred=p, state=s, action=a, value=v, sa2g=sa2g, m=m)
             v = 1 - v
+            ps_true.append(p_true[None])
+
+        ps_true = to_device(torch.cat(ps_true[::-1], dim=0), device=player.device)
+
+        loss = criterion(ps_pred, ps_true)
+        optimizer_step(optimizer=optimizer, loss=loss)
+        loss_history.append(loss.item())
 
         player.update_field(field=np.zeros((n, m)))
 
         if len(sa2g) > hash_expiration_pool:
-            sa2g = sort_and_clear_running_mean_hash_table(sa2g, hashes_to_leave=int(hash_expiration_pool * train_eps))
+            sa2g = sort_and_clear_running_mean_hash_table(sa2g, hashes_to_leave=int(hash_expiration_pool * (1 - eps)))
 
     return loss_history, sa2g
