@@ -13,7 +13,7 @@ def get_check_kernel(kernel_len=5, direction='row'):
         raise ValueError(f'`direction` must be one of the {DIRECTIONS}, {direction} given')
 
     if 'diag' in direction:
-        kernel_w = torch.Tensor(np.array([[np.eye(kernel_len)]]))
+        kernel_w = torch.tensor(np.array([[np.eye(kernel_len)]]))
         kernel = nn.Conv2d(1, 1, kernel_len, bias=False)
         if '1' in direction:
             kernel.weight = nn.Parameter(kernel_w.flip(dims=(-1, )), requires_grad=False)
@@ -22,7 +22,7 @@ def get_check_kernel(kernel_len=5, direction='row'):
         kernel.eval()
         return kernel
     else:
-        kernel_w = torch.Tensor([[[[1] * kernel_len]]])
+        kernel_w = torch.tensor([[[[1] * kernel_len]]])
         if 'row' in direction:
             kernel = nn.Conv2d(1, 1, (1, kernel_len), bias=False)
             kernel.weight = nn.Parameter(kernel_w, requires_grad=False)
