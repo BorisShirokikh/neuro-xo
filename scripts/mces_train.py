@@ -3,13 +3,13 @@ from pathlib import Path
 import argparse
 
 from tqdm import trange
-import numpy as np
-from dpipe.io import save, load
+
+from torch.utils.tensorboard import SummaryWriter
+
 from dpipe.torch import save_model_state, load_model_state
 
 from ttt_lib.monte_carlo_es import PolicyNetworkMCES, PolicyPlayer, train_on_policy_monte_carlo_es
 from ttt_lib.field import Field
-
 
 if __name__ == '__main__':
     MCES_EXP_PATH = Path('/experiments/borish/RL/ttt/mces')
@@ -32,6 +32,11 @@ if __name__ == '__main__':
     exp_path = MCES_EXP_PATH / args.exp_name
     os.makedirs(exp_path, exist_ok=True)
 
+    log_dir = exp_path / 'logs'
+    log_dir.makedir()
+
+    logger = SummaryWriter(log_dir=log_dir)
+
     preload_path = args.preload_path
 
     # hyperparameters:
@@ -53,12 +58,8 @@ if __name__ == '__main__':
     player = PolicyPlayer(model=model, field=field, eps=eps, device=device)
 
     # TRAIN:
-    loss_history, sa2g = train_on_policy_monte_carlo_es(player, n_episodes=n_episodes, eps=eps, lr=lr,
-                                                        verbose_module=trange, augm=augm)
-
-    if preload_path is not None:
-        loss_history = np.concatenate((load(Path(preload_path) / 'loss_history.json'), loss_history)).tolist()
+    sa2g = train_on_policy_monte_carlo_es(player, n_episodes=n_episodes, eps=eps, lr=lr,
+                                          verbose_module=trange, augm=augm, logger=logger)
     # SAVE:
-    save(loss_history, exp_path / 'loss_history.json')
     # save(sa2g, exp_path / 'sa2g.json')
     save_model_state(player.model, exp_path / 'model.pth')

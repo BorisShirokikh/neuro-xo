@@ -173,8 +173,7 @@ def backprop_sa(p_pred, state, action, value, sa2g, m, key_m='running_mean', key
 
 
 def train_on_policy_monte_carlo_es(player, n_episodes=1000, eps=0.1, lr=1e-2, hash_expiration_pool=100000,
-                                   verbose_module=trange, augm=False):
-    loss_history = []
+                                   verbose_module=trange, augm=False, logger=None):
     optimizer = Adam(player.model.parameters(), lr=lr)
     criterion = binary_cross_entropy
 
@@ -182,7 +181,7 @@ def train_on_policy_monte_carlo_es(player, n_episodes=1000, eps=0.1, lr=1e-2, ha
 
     n, m = player.field.get_shape()
 
-    for _ in verbose_module(n_episodes):
+    for ep in verbose_module(n_episodes):
         player.eval()
         f_history, s_history, a_history, value = play_game(player=player, augm=augm)
 
@@ -201,11 +200,11 @@ def train_on_policy_monte_carlo_es(player, n_episodes=1000, eps=0.1, lr=1e-2, ha
 
         loss = criterion(ps_pred, ps_true)
         optimizer_step(optimizer=optimizer, loss=loss)
-        loss_history.append(loss.item())
+        logger.add_scalar('loss/train', loss.item(), ep)
 
         player.update_field(field=np.zeros((n, m)))
 
         if len(sa2g) > hash_expiration_pool:
             sa2g = sort_and_clear_running_mean_hash_table(sa2g, hashes_to_leave=int(hash_expiration_pool * (1 - eps)))
 
-    return loss_history, sa2g
+    return sa2g
