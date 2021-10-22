@@ -7,13 +7,24 @@ from dpipe.torch import to_np, to_device, to_var
 
 DIRECTIONS = ('row', 'col', 'diag', 'diag1')
 
+WIN_VALUE = 1
+DRAW_VALUE = 0
+
+
+def _check_numpy_field(field: np.ndarray):
+    if len(field.shape) != 2:
+        raise ValueError(f'Field could be initialized only with 2-dim arrays; '
+                         f'however, {len(field.shape)}-dim array is given')
+    if field.shape[0] != field.shape[1]:
+        raise ValueError(f'Working with square fields only; however, shape `{field.shape}` is given.')
+
 
 def get_check_kernel(kernel_len=5, direction='row'):
     if direction not in DIRECTIONS:
         raise ValueError(f'`direction` must be one of the {DIRECTIONS}, {direction} given')
 
     if 'diag' in direction:
-        kernel_w = torch.tensor(np.array([[np.eye(kernel_len)]]))
+        kernel_w = torch.tensor(np.array([[np.eye(kernel_len, dtype=np.float32)]]))
         kernel = nn.Conv2d(1, 1, kernel_len, bias=False)
         if '1' in direction:
             kernel.weight = nn.Parameter(kernel_w.flip(dims=(-1, )), requires_grad=False)
@@ -22,7 +33,7 @@ def get_check_kernel(kernel_len=5, direction='row'):
         kernel.eval()
         return kernel
     else:
-        kernel_w = torch.tensor([[[[1] * kernel_len]]])
+        kernel_w = torch.tensor([[[[1.] * kernel_len]]])
         if 'row' in direction:
             kernel = nn.Conv2d(1, 1, (1, kernel_len), bias=False)
             kernel.weight = nn.Parameter(kernel_w, requires_grad=False)
@@ -34,16 +45,18 @@ def get_check_kernel(kernel_len=5, direction='row'):
 
 
 class Field:
-    def __init__(self, n=10, m=10, field=None, device='cpu', check_device='cpu'):
+    def __init__(self, n=10, kernel_len=5, field=None, device='cpu', check_device='cpu'):
         if field is not None:
             if not isinstance(field, np.ndarray):
                 field = to_np(field)
+            _check_numpy_field(field)
             self._field = np.copy(np.float32(field))
-            self._n, self._m = self._field.shape
+            self._n = self._field.shape[0]
         else:
-            self._n, self._m = n, m
-            self._field = np.zeros((n, m), dtype='float32')
+            self._n = n
+            self._field = np.zeros((n, n), dtype='float32')
 
+        self.kernel_len = kernel_len
         self.next_action_id = 1
 
         self.device = device
@@ -53,10 +66,10 @@ class Field:
 
         self.check_device = check_device
         self._check_field = to_var(self._field[None, None], device=check_device)
-        self._row_kernel = to_device(get_check_kernel(kernel_len=5, direction='row'), device=check_device)
-        self._col_kernel = to_device(get_check_kernel(kernel_len=5, direction='col'), device=check_device)
-        self._diag_kernel = to_device(get_check_kernel(kernel_len=5, direction='diag'), device=check_device)
-        self._diag1_kernel = to_device(get_check_kernel(kernel_len=5, direction='diag1'), device=check_device)
+        self._row_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='row'), device=check_device)
+        self._col_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='col'), device=check_device)
+        self._diag_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='diag'), device=check_device)
+        self._diag1_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='diag1'), device=check_device)
 
     def _update_action_id(self):
         self.next_action_id = -self.next_action_id
@@ -113,24 +126,26 @@ class Field:
 
     def check_win(self, _id=None):
         t = (self._check_field == ((-self.next_action_id) if _id is None else _id)).float()
+        k = self.kernel_len
 
-        if torch.any(self._row_kernel(t) >= 5):
+        if torch.any(self._row_kernel(t) >= k):
             return True
-        if torch.any(self._col_kernel(t) >= 5):
+        if torch.any(self._col_kernel(t) >= k):
             return True
-        if torch.any(self._diag_kernel(t) >= 5):
+        if torch.any(self._diag_kernel(t) >= k):
             return True
-        if torch.any(self._diag1_kernel(t) >= 5):
+        if torch.any(self._diag1_kernel(t) >= k):
             return True
         return False
 
     def get_value(self, _id=None):
+        depth = self.get_depth()
         value = None
-        if self.get_depth() > 8:  # slightly speedups computation
+        if depth > (self.kernel_len * 2 - 2):  # slightly speedups computation
             if self.check_win(_id=_id):
-                value = 1
-            elif self.check_draw():
-                value = 0.5
+                value = WIN_VALUE
+            elif depth == self._n ** 2:  # self.check_draw():
+                value = DRAW_VALUE
         return value
 
     def get_state(self):
@@ -146,8 +161,8 @@ class Field:
         field = self._field if field is None else field
         return np.count_nonzero(field)
 
-    def get_shape(self):
-        return self._n, self._m
+    def get_size(self):
+        return self._n
 
     def set_state(self, field):
         if not isinstance(field, np.ndarray):
