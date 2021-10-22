@@ -26,9 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--field_size', required=False, type=int, default=3)
     parser.add_argument('--win_len', required=False, type=int, default=3)
     parser.add_argument('--device', required=False, type=str, default='cuda')
-    parser.add_argument('--n_episodes', required=False, type=int, default=1000)
-    parser.add_argument('--eps', required=False, type=float, default=0.0)
-    parser.add_argument('--lr', required=False, type=float, default=0.01)
+    parser.add_argument('--lr', required=False, type=float, default=0.001)
     parser.add_argument('--augm', required=False, action='store_true', default=False)
 
     parser.add_argument('--preload_path', required=False, type=str, default=None)
@@ -49,8 +47,6 @@ if __name__ == '__main__':
     n = args.field_size
     kernel_len = args.win_len
     device = args.device
-    n_episodes = args.n_episodes
-    eps = args.eps
     lr = args.lr
     augm = args.augm
 
@@ -62,10 +58,15 @@ if __name__ == '__main__':
     if preload_path is not None:
         load_model_state(model, Path(preload_path) / 'model.pth')
 
-    player = PolicyPlayer(model=model, field=field, eps=eps, device=device)
+    n_episodes = 100000
+    eps_init = 0.5
+    ep2eps = {10000: 0.2, 20000: 0.15, 50000: 0.1}
+
+    player = PolicyPlayer(model=model, field=field, eps=eps_init, device=device)
 
     # TRAIN:
-    loss = train_q_learning(player, n_episodes=n_episodes, n_step_q=n_step_q, eps=eps, lr=lr, augm=augm, logger=logger)
+    loss = train_q_learning(player, n_episodes=n_episodes, n_step_q=n_step_q, ep2eps=ep2eps, lr=lr, augm=augm,
+                            logger=logger)
     # SAVE:
     # save(sa2g, exp_path / 'sa2g.json')
     save_model_state(player.model, exp_path / 'model.pth')
