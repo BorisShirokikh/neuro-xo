@@ -308,7 +308,7 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
         p_history.append(p)
         a_history.append(a)
 
-        if v is not None:
+        if v is None:
             player_wait.update_field(field=player_act.field.get_state())
             player_temp = player_act
             player_act = player_wait
