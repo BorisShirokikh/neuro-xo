@@ -31,7 +31,7 @@ if __name__ == '__main__':
     os.makedirs(exp_path, exist_ok=True)
 
     log_dir = exp_path / 'logs'
-    log_dir.mkdir()
+    log_dir.mkdir(exist_ok=True)
 
     logger = SummaryWriter(log_dir=log_dir)
 
