@@ -217,8 +217,6 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
                      n_step_q: int = 2, sigma: float = 0, ep2eps: dict = None, lr: float = 4e-3,
                      episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
                      duel_path=None):
-    if n_step_q not in (1, 2):
-        raise ValueError(f'`n_step_q` should be 1 or 2; however, {n_step_q} is given.')
 
     n = player.field.get_size()
     optimizer = SGD(player.model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4, nesterov=True)

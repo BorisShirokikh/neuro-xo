@@ -21,7 +21,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--exp_name', required=True, type=str)
-    parser.add_argument('--n_step_q', required=True, type=int, choices=(1, 2))
+    parser.add_argument('--n_step_q', required=True, type=int)
 
     parser.add_argument('--lr', required=False, type=float, default=3e-4)
 

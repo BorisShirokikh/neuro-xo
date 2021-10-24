@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import choose_existing
 from dpipe.torch import save_model_state, load_model_state
 
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ3, PolicyNetworkQ6, PolicyNetworkQ10, PolicyNetworkQ10Light
+from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light
 from ttt_lib.q_learning import PolicyPlayer, train_q_learning
 from ttt_lib.field import Field
 
@@ -15,19 +15,15 @@ from ttt_lib.field import Field
 if __name__ == '__main__':
 
     Q_EXP_PATH = choose_existing(
-        Path('/nmnt/x4-hdd/experiments/rl/'),
-        Path('/experiments/borish/RL/ttt/mces')
+        Path('/nmnt/x4-hdd/experiments/rl/q_10x10/'),
     )
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--exp_name', required=True, type=str)
-    parser.add_argument('--n_step_q', required=True, type=int, choices=(1, 2))
+    parser.add_argument('--n_step_q', required=True, type=int)
 
-    parser.add_argument('--field_size', required=False, type=int, default=3)
-    parser.add_argument('--win_len', required=False, type=int, default=3)
-
-    parser.add_argument('--light_model', required=False, action='store_true', default=False)
+    parser.add_argument('--lr', required=False, type=float, default=1e-5)
 
     parser.add_argument('--duel_name', required=False, type=str, default=None)
     parser.add_argument('--preload_path', required=False, type=str, default=None)
@@ -47,25 +43,15 @@ if __name__ == '__main__':
     n_step_q = args.n_step_q
 
     # hyperparameters:
-    n = args.field_size
-    kernel_len = args.win_len
-    lr = 1e-2
+    n = 10
+    kernel_len = 5
+    lr = args.lr
     device = 'cuda'
 
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
     cnn_features = (128, 64)
-    if n == 3:
-        model = PolicyNetworkQ3(n=n, structure=cnn_features)
-    elif n == 6:
-        model = PolicyNetworkQ6(n=n, structure=cnn_features)
-    elif n == 10:
-        if args.light_model:
-            model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
-        else:
-            model = PolicyNetworkQ10(n=n, structure=cnn_features)
-    else:
-        raise ValueError('Only n = 3, 6, or 10 is supported:(')
+    model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
 
     preload_path = args.preload_path
     if preload_path is not None:
