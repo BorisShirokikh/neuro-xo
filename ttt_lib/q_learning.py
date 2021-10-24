@@ -238,17 +238,19 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
         loss.to(player.device)
 
         rev_a_history = a_history[::-1]
-        rev_p_history = None
+        # rev_p_history = None
         rev_q_history = torch.flip(qs_pred, dims=(0, ))
         rev_q_max_history = q_max_history[::-1]
         for t_rev, (a, q) in enumerate(zip(rev_a_history, rev_q_history)):
             if t_rev < n_step_q:
-                q_star = value 
+                q_star = (-1) ** (n_step_q + 1) * value
             else:
-                if sigma < np.random.rand():
-                    q_star = rev_q_max_history[t_rev - n_step_q]
+                if True:  # TODO: sigma < np.random.rand():
+                    q_star = (-1) ** n_step_q * rev_q_max_history[t_rev - n_step_q]
                 else:
-                    q_star = np.multiply(rev_p_history[t_rev - n_step_q], rev_q_history[t_rev - n_step_q]).mean()  # TODO: get rev_p_history
+                    # TODO: np vs torch cuda tensors ...
+                    # TODO: proba is not applicable in this eq.; we need eps-soft probas or do not need this eq. at all
+                    q_star = np.multiply(rev_p_history[t_rev - n_step_q], rev_q_history[t_rev - n_step_q]).mean()
             loss = loss + .5 * (q[a // n, a % n] - q_star) ** 2
 
         optimizer_step(optimizer=optimizer, loss=loss)
