@@ -1,6 +1,8 @@
 import os
 from collections import defaultdict
 
+import numpy as np
+
 
 def get_running_mean_hash_table():
     return defaultdict(lambda: defaultdict(float))
