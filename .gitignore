@@ -21,5 +21,6 @@ wheels/
 *.egg
 
 .idea/
+.vscode/
 
 .ipynb_checkpoints

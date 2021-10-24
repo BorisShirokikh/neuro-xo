@@ -213,7 +213,7 @@ def validate(val: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_du
 
 
 def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_episodes: int, augm: bool = True,
-                     n_step_q: int = 2, ep2eps: dict = None, lr: float = 4e-3,
+                     n_step_q: int = 2, sigma: float = 0, ep2eps: dict = None, lr: float = 4e-3,
                      episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
                      duel_path=None):
     if n_step_q not in (1, 2):
@@ -237,21 +237,18 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
         loss.to(player.device)
 
         rev_a_history = a_history[::-1]
+        rev_p_history = None
         rev_q_history = torch.flip(qs_pred, dims=(0, ))
         rev_q_max_history = q_max_history[::-1]
         for t_rev, (a, q) in enumerate(zip(rev_a_history, rev_q_history)):
-            if n_step_q == 1:
-                if t_rev == 0:
-                    loss = loss + .5 * (q[a // n, a % n] - value) ** 2
+            if t_rev < n_step_q:
+                q_star = value 
+            else:
+                if sigma < np.random.rand():
+                    q_star = rev_q_max_history[t_rev - n_step_q]
                 else:
-                    loss = loss + .5 * (q[a // n, a % n] + rev_q_max_history[t_rev - 1]) ** 2
-            else:  # n_step_q == 2:
-                if t_rev == 0:
-                    loss = loss + .5 * (q[a // n, a % n] - value) ** 2
-                elif t_rev == 1:
-                    loss = loss + .5 * (q[a // n, a % n] + value) ** 2
-                else:
-                    loss = loss + .5 * (q[a // n, a % n] - rev_q_max_history[t_rev - 2]) ** 2
+                    q_star = np.multiply(rev_p_history[t_rev - n_step_q], rev_q_history[t_rev - n_step_q]).mean()  # TODO: get rev_p_history
+            loss = loss + .5 * (q[a // n, a % n] - q_star) ** 2
 
         optimizer_step(optimizer=optimizer, loss=loss)
 
