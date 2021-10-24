@@ -1,19 +1,18 @@
 from pathlib import Path
 import time
+import os
 
 from dpipe.torch import load_model_state
 
-from ttt_lib.utils import choose_model
 
-
-def wait_and_load_model_state(module, path, sleep_interval=5, max_wait_ticks=1000):
-    path = Path(path)
+def wait_and_load_model_state(module, exp_path, ep, sleep_interval=5, max_wait_ticks=1000):
+    same_model_path = Path(exp_path) / f'model_{ep}.pth'
 
     tick = 0
-    while choose_model(path) is None:
+    while not os.path.exists(same_model_path):
         time.sleep(sleep_interval)
         tick += 1
         if tick >= max_wait_ticks:
             break
 
-    load_model_state(module=module, path=path / choose_model(path))
+    load_model_state(module=module, path=same_model_path)

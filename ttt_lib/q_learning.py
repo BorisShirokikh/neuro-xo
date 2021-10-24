@@ -162,7 +162,8 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     return winner if return_result_only else (s_history, f_history, a_history, q_history, p_history, winner)
 
 
-def validate(val: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000, duel_path=None):
+def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000,
+             duel_path=None):
     device = player.device
 
     validation_field = Field(n=n, kernel_len=player.field.kernel_len, device=device, check_device=device)
@@ -170,7 +171,7 @@ def validate(val: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_du
     player_model = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
     player_opponent = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
     if duel_path is not None:
-        wait_and_load_model_state(module=player_opponent.model, path=duel_path)
+        wait_and_load_model_state(module=player_opponent.model, exp_path=duel_path, ep=ep)
 
     player_random = PolicyPlayer(model=PolicyNetworkRandom(n=n, in_channels=player.model.in_channels),
                                  field=validation_field, eps=1., device=device)
@@ -264,7 +265,7 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
 
         # ### validation: ###
         if (ep > 0) and (ep % episodes_per_epoch == 0):
-            validate(val=ep // episodes_per_epoch, player=player, logger=logger, n=n, n_duels=n_duels,
+            validate(val=ep // episodes_per_epoch, ep=ep, player=player, logger=logger, n=n, n_duels=n_duels,
                      duel_path=duel_path)
 
         # ### scheduler(eps): ###
