@@ -243,7 +243,7 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
         rev_q_max_history = q_max_history[::-1]
         for t_rev, (a, q) in enumerate(zip(rev_a_history, rev_q_history)):
             if t_rev < n_step_q:
-                q_star = (-1) ** (n_step_q + 1) * value
+                q_star = (-1) ** t_rev * value
             else:
                 if True:  # TODO: sigma < np.random.rand():
                     q_star = (-1) ** n_step_q * rev_q_max_history[t_rev - n_step_q]
