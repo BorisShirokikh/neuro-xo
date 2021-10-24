@@ -1,6 +1,5 @@
+import os
 from collections import defaultdict
-
-import numpy as np
 
 
 def get_running_mean_hash_table():
@@ -28,18 +27,12 @@ def sort_and_clear_running_mean_hash_table(ht, key_n='n', hashes_to_leave=1000):
     return ht_new
 
 
-def flip_augm(x, p=0.5):
-    if np.random.rand() < p:
-        flip_axis = np.random.choice((0, 1))
-        x = np.flip(x, axis=flip_axis)
-    return x
-
-
-def rot_augm(x, p=0.75):
-    if np.random.rand() < p:
-        x = np.rot90(x, k=np.random.randint(1, 4), axes=(0, 1))
-    return x
-
-
-def augm_spatial(x):
-    return rot_augm(flip_augm(x))
+def choose_model(path):
+    models = [m for m in os.listdir(path) if 'model' in m]
+    if len(models) == 0:
+        return None
+    elif 'model.pth' in models:
+        return 'model.pth'
+    else:
+        n = np.max([int(m.strip('.pth').split('_')[-1]) for m in models])
+        return f'model_{n}.pth'

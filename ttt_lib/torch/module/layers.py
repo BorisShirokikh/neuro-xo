@@ -4,12 +4,6 @@ import torch
 import torch.nn as nn
 
 
-def optimizer_step(optimizer, loss):
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-
 class Bias(nn.Module):
     def __init__(self, n_channels, device=None, dtype=None) -> None:
         factory_kwargs = {'device': device, 'dtype': dtype}

@@ -4,176 +4,16 @@ from copy import deepcopy
 import numpy as np
 from tqdm import trange
 import torch
-import torch.nn as nn
+
 from torch.optim import SGD
-from torch.nn.functional import mse_loss
 from dpipe.torch import to_device, to_var, save_model_state
-from dpipe.layers import ResBlock2d
 from torch.utils.tensorboard import SummaryWriter
 
 from ttt_lib.field import Field
-from ttt_lib.utils import augm_spatial
-from ttt_lib.torch import optimizer_step, Bias, MaskedSoftmax
-
-
-class PolicyNetworkQ(nn.Module):
-    def __init__(self, structure=None, n=3, in_channels=5):
-        super().__init__()
-        if structure is None:
-            structure = (128, 64)
-        self.structure = structure
-        self.n = n
-        self.in_channels = in_channels
-
-        n_features = structure[0]
-        n_features_policy = structure[1]
-        self.model = nn.Sequential(
-            nn.Conv2d(in_channels, n_features, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            # policy head
-            nn.Conv2d(n_features, n_features_policy, kernel_size=1, padding=0, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(n_features_policy, 1, kernel_size=1, padding=0, bias=False),
-            nn.Flatten(),
-            Bias(n_channels=n ** 2),
-            nn.Tanh(),
-        )
-        self.flatten = nn.Flatten()
-        self.masked_softmax = MaskedSoftmax(dim=1)
-
-    def forward(self, x):
-        return torch.reshape(self.model(x), shape=(-1, 1, self.n, self.n))
-
-    def predict_proba(self, x, q):
-        p = self.masked_softmax(self.flatten(q), self.flatten(x[:, -1, ...].unsqueeze(1)))
-        return torch.reshape(p, shape=(-1, 1, self.n, self.n))
-
-
-class PolicyNetworkQ6(nn.Module):
-    def __init__(self, structure=None, n=6, in_channels=5):
-        super().__init__()
-        if structure is None:
-            structure = (128, 64)
-        self.structure = structure
-        self.n = n
-        self.in_channels = in_channels
-
-        n_features = structure[0]
-        n_features_policy = structure[1]
-        self.model = nn.Sequential(
-            nn.Conv2d(in_channels, n_features, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            # policy head
-            nn.Conv2d(n_features, n_features_policy, kernel_size=1, padding=0, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(n_features_policy, 1, kernel_size=1, padding=0, bias=False),
-            nn.Flatten(),
-            Bias(n_channels=n ** 2),
-            nn.Tanh(),
-        )
-        self.flatten = nn.Flatten()
-        self.masked_softmax = MaskedSoftmax(dim=1)
-
-    def forward(self, x):
-        return torch.reshape(self.model(x), shape=(-1, 1, self.n, self.n))
-
-    def predict_proba(self, x, q):
-        p = self.masked_softmax(self.flatten(q), self.flatten(x[:, -1, ...].unsqueeze(1)))
-        return torch.reshape(p, shape=(-1, 1, self.n, self.n))
-
-
-class PolicyNetworkQ10(nn.Module):
-    def __init__(self, structure=None, n=10, in_channels=5):
-        super().__init__()
-        if structure is None:
-            structure = (128, 64)
-        self.structure = structure
-        self.n = n
-        self.in_channels = in_channels
-
-        n_features = structure[0]
-        n_features_policy = structure[1]
-        self.model = nn.Sequential(
-            nn.Conv2d(in_channels, n_features, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            # policy head
-            nn.Conv2d(n_features, n_features_policy, kernel_size=1, padding=0, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(n_features_policy, 1, kernel_size=1, padding=0, bias=False),
-            nn.Flatten(),
-            Bias(n_channels=n ** 2),
-            nn.Tanh(),
-        )
-        self.flatten = nn.Flatten()
-        self.masked_softmax = MaskedSoftmax(dim=1)
-
-    def forward(self, x):
-        return torch.reshape(self.model(x), shape=(-1, 1, self.n, self.n))
-
-    def predict_proba(self, x, q):
-        p = self.masked_softmax(self.flatten(q), self.flatten(x[:, -1, ...].unsqueeze(1)))
-        return torch.reshape(p, shape=(-1, 1, self.n, self.n))
-
-
-class PolicyNetworkQ10Light(nn.Module):
-    def __init__(self, structure=None, n=10, in_channels=5):
-        super().__init__()
-        if structure is None:
-            structure = (128, 64)
-        self.structure = structure
-        self.n = n
-        self.in_channels = in_channels
-
-        n_features = structure[0]
-        n_features_policy = structure[1]
-        self.model = nn.Sequential(
-            nn.Conv2d(in_channels, n_features, kernel_size=3, padding=1, bias=False),
-            nn.ReLU(inplace=True),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            # policy head
-            nn.Conv2d(n_features, n_features_policy, kernel_size=1, padding=0, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(n_features_policy, 1, kernel_size=1, padding=0, bias=False),
-            nn.Flatten(),
-            Bias(n_channels=n ** 2),
-            nn.Tanh(),
-        )
-        self.flatten = nn.Flatten()
-        self.masked_softmax = MaskedSoftmax(dim=1)
-
-    def forward(self, x):
-        return torch.reshape(self.model(x), shape=(-1, 1, self.n, self.n))
-
-    def predict_proba(self, x, q):
-        p = self.masked_softmax(self.flatten(q), self.flatten(x[:, -1, ...].unsqueeze(1)))
-        return torch.reshape(p, shape=(-1, 1, self.n, self.n))
-
-
-class PolicyNetworkRandom(nn.Module):
-    def __init__(self, n=3, in_channels=5):
-        super().__init__()
-        self.n = n
-        self.in_channels = in_channels
-
-        self.flatten = nn.Flatten()
-        self.masked_softmax = MaskedSoftmax(dim=1)
-
-    def forward(self, x):
-        return to_device(torch.zeros((1, 1, self.n, self.n), dtype=torch.float32), device=x)
-
-    def predict_proba(self, x, q):
-        p = self.masked_softmax(self.flatten(q), self.flatten(x[:, -1, ...].unsqueeze(1)))
-        return torch.reshape(p, shape=(-1, 1, self.n, self.n))
+from ttt_lib.torch.model import optimizer_step
+from ttt_lib.torch.module.policy_net import PolicyNetworkRandom
+from ttt_lib.im.augm import augm_spatial
+from ttt_lib.torch.utils import wait_and_load_model_state
 
 
 class PolicyPlayer:
@@ -322,38 +162,60 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     return winner if return_result_only else (s_history, f_history, a_history, q_history, p_history, winner)
 
 
-def validate(val: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000):
+def validate(val: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000, duel_path=None):
     device = player.device
 
     validation_field = Field(n=n, kernel_len=player.field.kernel_len, device=device, check_device=device)
+
     player_model = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
+    player_opponent = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
+    if duel_path is not None:
+        wait_and_load_model_state(module=player_opponent.model, path=duel_path)
+
     player_random = PolicyPlayer(model=PolicyNetworkRandom(n=n, in_channels=player.model.in_channels),
                                  field=validation_field, eps=1., device=device)
 
     # model (x) vs random (o):
     scores = np.array([play_duel(player_x=player_model, player_o=player_random, return_result_only=True)
                        for _ in range(n_duels)])
-    logger.add_scalar('val/winrate/model(x)_vs_random(o)', np.mean(scores == 1), val)
-    logger.add_scalar('val/draw_fraction/model(x)_vs_random(o)', np.mean(scores == 0), val)
+    logger.add_scalar('val/winrate/model(x) vs random(o)', np.mean(scores == 1), val)
+    logger.add_scalar('val/draw_fraction/model(x) vs random(o)', np.mean(scores == 0), val)
 
     # random (x) vs model (o):
     scores = np.array([play_duel(player_x=player_random, player_o=player_model, return_result_only=True)
                        for _ in range(n_duels)])
-    logger.add_scalar('val/winrate/model(o)_vs_random(x)', np.mean(scores == -1), val)
-    logger.add_scalar('val/draw_fraction/model(o)_vs_random(x)', np.mean(scores == 0), val)
+    logger.add_scalar('val/winrate/model(o) vs random(x)', np.mean(scores == -1), val)
+    logger.add_scalar('val/draw_fraction/model(o) vs random(x)', np.mean(scores == 0), val)
 
     # model (x) vs model (o):
     scores = np.array([play_duel(player_x=player, player_o=player_model, return_result_only=True)
                        for _ in range(n_duels)])
-    logger.add_scalar('val/winrate/model(x)_vs_model(o)', np.mean(scores == 1), val)
-    logger.add_scalar('val/draw_fraction/model(x)_vs_model(o)', np.mean(scores == 0), val)
+    logger.add_scalar('val/winrate/model(x) vs model(o)', np.mean(scores == 1), val)
+    logger.add_scalar('val/draw_fraction/model(x) vs model(o)', np.mean(scores == 0), val)
+    logger.add_scalar('val/winrate/model(o) vs model(x)', np.mean(scores == -1), val)
 
-    del player_random, player_model, validation_field
+    # model (x) vs opponent (o):
+    # opponent (x) vs model (o):
+    if duel_path is not None:
+        scores = np.array([play_duel(player_x=player_model, player_o=player_opponent, return_result_only=True)
+                           for _ in range(n_duels)])
+        logger.add_scalar('val/winrate/model(x) vs opponent(o)', np.mean(scores == 1), val)
+        logger.add_scalar('val/draw_fraction/model(x) vs opponent(o)', np.mean(scores == 0), val)
+        logger.add_scalar('val/winrate/opponent(o) vs model(x)', np.mean(scores == -1), val)
+
+        scores = np.array([play_duel(player_x=player_model, player_o=player_opponent, return_result_only=True)
+                           for _ in range(n_duels)])
+        logger.add_scalar('val/winrate/opponent(x) vs model(o)', np.mean(scores == 1), val)
+        logger.add_scalar('val/draw_fraction/opponent(x) vs model(o)', np.mean(scores == 0), val)
+        logger.add_scalar('val/winrate/model(o) vs opponent(x)', np.mean(scores == -1), val)
+
+    del player_random, player_model, player_opponent, validation_field
 
 
 def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_episodes: int, augm: bool = True,
                      n_step_q: int = 2, ep2eps: dict = None, lr: float = 4e-3,
-                     episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000):
+                     episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
+                     duel_path=None):
     if n_step_q not in (1, 2):
         raise ValueError(f'`n_step_q` should be 1 or 2; however, {n_step_q} is given.')
 
@@ -396,13 +258,14 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
         # ### logging: ###
         logger.add_scalar('loss/train', loss.item(), ep)
 
-        # ### validation: ###
-        if (ep > 0) and (ep % episodes_per_epoch == 0):
-            validate(val=ep // episodes_per_epoch, player=player, logger=logger, n=n, n_duels=n_duels)
-
         # ### saving model: ###
         if (ep > 0) and (ep % episodes_per_model_save == 0):
             save_model_state(player.model, exp_path / f'model_{ep}.pth')
+
+        # ### validation: ###
+        if (ep > 0) and (ep % episodes_per_epoch == 0):
+            validate(val=ep // episodes_per_epoch, player=player, logger=logger, n=n, n_duels=n_duels,
+                     duel_path=duel_path)
 
         # ### scheduler(eps): ###
         if ep2eps_curr_idx is not None:
