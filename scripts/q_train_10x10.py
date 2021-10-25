@@ -22,6 +22,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--exp_name', required=True, type=str)
     parser.add_argument('--n_step_q', required=True, type=int)
+    parser.add_argument('--lam', required=False, type=float, default=None)
 
     parser.add_argument('--lr', required=False, type=float, default=1e-5)
 
@@ -41,6 +42,7 @@ if __name__ == '__main__':
     logger = SummaryWriter(log_dir=log_dir)
 
     n_step_q = args.n_step_q
+    lam = args.lam
 
     # hyperparameters:
     n = 10
@@ -64,7 +66,7 @@ if __name__ == '__main__':
     player = PolicyPlayer(model=model, field=field, eps=eps_init, device=device)
 
     # TRAIN:
-    train_q_learning(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q,
+    train_q_learning(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q, lam=lam,
                      ep2eps=ep2eps, lr=lr,
                      episodes_per_epoch=10000, n_duels=100, episodes_per_model_save=10000,
                      duel_path=duel_path)

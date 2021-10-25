@@ -4,10 +4,10 @@ from copy import deepcopy
 import numpy as np
 from tqdm import trange
 import torch
-
 from torch.optim import SGD
-from dpipe.torch import to_device, to_var, save_model_state
 from torch.utils.tensorboard import SummaryWriter
+from dpipe.io import PathLike
+from dpipe.torch import to_device, to_var, save_model_state
 
 from ttt_lib.field import Field
 from ttt_lib.torch.model import optimizer_step
@@ -213,14 +213,38 @@ def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: 
     del player_random, player_model, player_opponent, validation_field
 
 
-def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_episodes: int, augm: bool = True,
-                     n_step_q: int = 2, sigma: float = 0, ep2eps: dict = None, lr: float = 4e-3,
+def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,
+                     augm: bool = True, n_step_q: int = 2, lam: float = None, sigma: float = 0,
+                     ep2eps: dict = None, lr: float = 4e-3,
                      episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
-                     duel_path=None):
+                     duel_path: PathLike = None):
+    """
+    Params
+    ------
+    player: PolicyPlayer
+    logger: SummaryWriter
+    exp_path: PathLike
+    n_episodes: int
+    augm: bool, default `True`.
+    n_step_q: int. The depth of action-value back-propagation through MC tree. The same as n in n-step tree-backup.
+        If `n_step_q=0`, `n_step_q` is being drawn from the Poisson distribution with `lam=lam` for the episode.
+        If `n_step_q=-1`, `n_step_q` is being drawn from the Poisson distribution with `lam=lam` for every iteration.
+    lam: float
+    sigma: float, optional. # TODO: is not implemented yet.
+    ep2eps: dict
+    lr: float
+    episodes_per_epoch: int
+    n_duels: int
+    episodes_per_model_save: int
+    duel_path: PathLike
+
+    Returns
+    -------
+    None
+    """
 
     n = player.field.get_size()
     optimizer = SGD(player.model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4, nesterov=True)
-    # criterion = mse_loss
 
     ep2eps_curr_idx = None if ep2eps is None else 0
     ep2eps_items = None if ep2eps is None else list(ep2eps.items())
@@ -228,6 +252,13 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
 
         s_history, f_history, a_history, q_history, q_max_history, p_history, value\
             = play_game(player=player, augm=augm)
+
+        if n_step_q > 0:
+            _n_step_qs = [n_step_q, ] * len(a_history)
+        elif n_step_q == 0:
+            _n_step_qs = [1 + np.random.poisson(lam=lam), ] * len(a_history)
+        else:  # n_step_q == -1:  # TODO: also works for n_step_q < -1
+            _n_step_qs = np.random.poisson(lam=3, size=len(a_history)) + 1
 
         player.train()
         qs_pred = player.forward(to_var(np.concatenate(f_history, axis=0), device=player.device)).squeeze(1)
@@ -239,16 +270,16 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path, n_ep
         # rev_p_history = None
         rev_q_history = torch.flip(qs_pred, dims=(0, ))
         rev_q_max_history = q_max_history[::-1]
-        for t_rev, (a, q) in enumerate(zip(rev_a_history, rev_q_history)):
-            if t_rev < n_step_q:
+        for t_rev, (a, q, _n_step_q) in enumerate(zip(rev_a_history, rev_q_history, _n_step_qs)):
+            if t_rev < _n_step_q:
                 q_star = (-1) ** t_rev * value
             else:
                 if True:  # TODO: sigma < np.random.rand():
-                    q_star = (-1) ** n_step_q * rev_q_max_history[t_rev - n_step_q]
+                    q_star = (-1) ** _n_step_q * rev_q_max_history[t_rev - _n_step_q]
                 else:
                     # TODO: np vs torch cuda tensors ...
                     # TODO: proba is not applicable in this eq.; we need eps-soft probas or do not need this eq. at all
-                    q_star = np.multiply(rev_p_history[t_rev - n_step_q], rev_q_history[t_rev - n_step_q]).mean()
+                    q_star = np.multiply(rev_p_history[t_rev - _n_step_q], rev_q_history[t_rev - _n_step_q]).mean()
             loss = loss + .5 * (q[a // n, a % n] - q_star) ** 2
 
         optimizer_step(optimizer=optimizer, loss=loss)
