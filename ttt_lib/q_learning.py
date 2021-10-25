@@ -38,15 +38,20 @@ class PolicyPlayer:
 
         avail_p = policy.reshape(-1)[avail_actions]
         argmax_avail_action_idx = random.choice(torch.where(avail_p == avail_p.max(), 1., 0.).nonzero()).item()
+        exploitative = True
 
         if eps > 0:
             soft_p = np.zeros(n_actions) + eps / n_actions
             soft_p[argmax_avail_action_idx] += (1 - eps)
-            argmax_avail_action_idx = np.random.choice(np.arange(n_actions), p=soft_p)
+            soft_p_action_idx = np.random.choice(np.arange(n_actions), p=soft_p)
+
+            if soft_p_action_idx != argmax_avail_action_idx:
+                exploitative = False
+                argmax_avail_action_idx = soft_p_action_idx
 
         action = avail_actions[argmax_avail_action_idx].item()
 
-        return action, action // self.n, action % self.n
+        return action, action // self.n, action % self.n, exploitative
 
     def eval(self):
         self.model.eval()
@@ -68,10 +73,10 @@ class PolicyPlayer:
 
         policy, proba = self.forward_state()
 
-        action, i, j = self._calc_move(policy=policy, eps=eps)
+        action, i, j, exploitative = self._calc_move(policy=policy, eps=eps)
         value = self._forward_action(i, j)
 
-        return policy, proba, action, value
+        return policy, proba, action, value, exploitative
 
     def manual_action(self, i, j):
         # compatibility with `action` output:
@@ -83,7 +88,7 @@ class PolicyPlayer:
 
         value = self._forward_action(i, j)
 
-        return policy_manual, proba_manual, action, value
+        return policy_manual, proba_manual, action, value, None
 
     def update_field(self, field):
         self.field.set_state(field=field)
@@ -100,6 +105,7 @@ def play_game(player, field=None, train=True, augm=False):
     s_history = []      # states
     f_history = []      # features
     a_history = []      # actions
+    e_history = []      # exploitations
     q_history = []      # policies
     q_max_history = []  # max Q values
     p_history = []      # probas
@@ -109,16 +115,17 @@ def play_game(player, field=None, train=True, augm=False):
     while v is None:
         s_history.append(player.field.get_state())
         f_history.append(player.field.get_features())
-        q, p, a, v = player.action(train=train)
+        q, p, a, v, e = player.action(train=train)
         q_history.append(q)
         q_max_history.append(q[p > 0].max().item())
         p_history.append(p)
         a_history.append(a)
+        e_history.append(e)
 
         if augm:
             player.update_field(augm_spatial(player.field.get_state()))
 
-    return s_history, f_history, a_history, q_history, q_max_history, p_history, v
+    return s_history, f_history, a_history, q_history, q_max_history, p_history, v, e_history
 
 
 def play_duel(player_x, player_o, field=None, return_result_only=False):
@@ -134,6 +141,7 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     s_history = []  # states
     f_history = []  # features
     a_history = []  # actions
+    e_history = []  # exploitations
     q_history = []  # policies
     p_history = []  # probas
 
@@ -143,10 +151,11 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     while v is None:
         s_history.append(player_act.field.get_state())
         f_history.append(player_act.field.get_features())
-        q, p, a, v = player_act.action(train=True)
+        q, p, a, v, e = player_act.action(train=True)
         q_history.append(q)
         p_history.append(p)
         a_history.append(a)
+        e_history.append(e)
 
         if v is None:
             player_wait.update_field(field=player_act.field.get_state())
@@ -159,7 +168,7 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     else:  # v == 1:
         winner = - player_act.field.next_action_id
 
-    return winner if return_result_only else (s_history, f_history, a_history, q_history, p_history, winner)
+    return winner if return_result_only else (s_history, f_history, a_history, q_history, p_history, winner, e_history)
 
 
 def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000,
@@ -214,7 +223,7 @@ def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: 
 
 
 def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,
-                     augm: bool = True, n_step_q: int = 2, lam: float = None, sigma: float = 0,
+                     augm: bool = True, n_step_q: int = 2, lam: float = None, sigma_p: float = 0,
                      ep2eps: dict = None, lr: float = 4e-3,
                      episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
                      duel_path: PathLike = None):
@@ -250,15 +259,18 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
     ep2eps_items = None if ep2eps is None else list(ep2eps.items())
     for ep in trange(n_episodes):
 
-        s_history, f_history, a_history, q_history, q_max_history, p_history, value\
+        s_history, f_history, a_history, q_history, q_max_history, p_history, value, e_history\
             = play_game(player=player, augm=augm)
 
         if n_step_q > 0:
             _n_step_qs = [n_step_q, ] * len(a_history)
+            sigmas = np.random.binomial(size=len(a_history), n=1, p=sigma_p)
         elif n_step_q == 0:
             _n_step_qs = [1 + np.random.poisson(lam=lam), ] * len(a_history)
+            sigmas = None
         else:  # n_step_q == -1:  # TODO: also works for n_step_q < -1
             _n_step_qs = np.random.poisson(lam=3, size=len(a_history)) + 1
+            sigmas = None
 
         player.train()
         qs_pred = player.forward(to_var(np.concatenate(f_history, axis=0), device=player.device)).squeeze(1)
@@ -267,19 +279,23 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
         loss.to(player.device)
 
         rev_a_history = a_history[::-1]
-        # rev_p_history = None
+        rev_e_history = e_history[::-1]
         rev_q_history = torch.flip(qs_pred, dims=(0, ))
         rev_q_max_history = q_max_history[::-1]
+
         for t_rev, (a, q, _n_step_q) in enumerate(zip(rev_a_history, rev_q_history, _n_step_qs)):
-            if t_rev < _n_step_q:
-                q_star = (-1) ** t_rev * value
-            else:
-                if True:  # TODO: sigma < np.random.rand():
-                    q_star = (-1) ** _n_step_q * rev_q_max_history[t_rev - _n_step_q]
+            for k in range(max(0, t_rev - _n_step_q + 1), t_rev + 1):
+                if k == 0:
+                    q_star = value
                 else:
-                    # TODO: np vs torch cuda tensors ...
-                    # TODO: proba is not applicable in this eq.; we need eps-soft probas or do not need this eq. at all
-                    q_star = np.multiply(rev_p_history[t_rev - _n_step_q], rev_q_history[t_rev - _n_step_q]).mean()
+                    n_actions = n ** 2 - len(a_history) + t_rev + 1
+
+                    pi = 1 if rev_e_history[k] else 0
+                    rho = n_actions / (n_actions * (1 - player.eps) + player.eps) if rev_e_history[k] else 0
+
+                    q_star = -(rev_q_max_history[k] + (sigmas[k] * rho + (1 - sigmas[k]) * pi) * (q_star - rev_q_history[k]))
+
+
             loss = loss + .5 * (q[a // n, a % n] - q_star) ** 2
 
         optimizer_step(optimizer=optimizer, loss=loss)
@@ -300,3 +316,4 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
         if ep2eps_curr_idx is not None:
             if ep == ep2eps_items[ep2eps_curr_idx][0]:
                 player.eps = ep2eps_items[ep2eps_curr_idx][1]
+                ep2eps_curr_idx += 1
