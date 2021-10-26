@@ -28,6 +28,8 @@ if __name__ == '__main__':
     parser.add_argument('--lam', required=False, type=float, default=None)
 
     parser.add_argument('--lr', required=False, type=float, default=1e-5)
+    parser.add_argument('--eps', required=False, type=float, default=0.5)
+    parser.add_argument('--episodes', required=False, type=int, default=1000000)
 
     parser.add_argument('--duel_name', required=False, type=str, default=None)
     parser.add_argument('--preload_path', required=False, type=str, default=None)
@@ -54,6 +56,10 @@ if __name__ == '__main__':
     kernel_len = 5
     lr = args.lr
     device = 'cuda'
+    eps = args.eps
+    n_episodes = args.episodes
+    # ep2eps = {int(7e5): 0.4, int(10e5): 0.3, int(12e5): 0.3, int(14e5): 0.2, int(16e5): 0.1, }
+    ep2eps = None
 
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
@@ -67,11 +73,7 @@ if __name__ == '__main__':
     if preload_path is not None:
         load_model_state(model, preload_path)
 
-    n_episodes = 2000000
-    eps_init = 0.5
-    ep2eps = {int(7e5): 0.4, int(10e5): 0.3, int(12e5): 0.3, int(14e5): 0.2, int(16e5): 0.1, }
-
-    player = PolicyPlayer(model=model, field=field, eps=eps_init, device=device)
+    player = PolicyPlayer(model=model, field=field, eps=eps, device=device)
 
     # TRAIN:
     method = args.method

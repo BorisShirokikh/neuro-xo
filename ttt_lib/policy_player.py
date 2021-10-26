@@ -60,16 +60,34 @@ class PolicyPlayer:
     def forward(self, x):
         return self.model(x)
 
-    def forward_state(self, state=None):
+    def forward_state(self, state=None, tta=False):
         state = self.field.get_running_features() if state is None else self.field.field2features(field=state)
-        policy = self.forward(state)
+
+        if tta:
+            augm_state = []
+            for k in (0, 1, 2, 3):
+                sr = state.rot90(k, (-2, -1))
+                srf = sr.flip(-1)
+                augm_state.append(sr)
+                augm_state.append(srf)
+            policy = self.forward(torch.cat(augm_state, dim=0))
+
+            de_augm_policy = []
+            for k in (0, 1, 2, 3):
+                de_augm_policy.append(policy[k * 2][None].rot90(k, (-1, -2)))
+                de_augm_policy.append(policy[k * 2 + 1][None].rot90(k, (-1, -2)).flip(-1))
+            policy = torch.mean(torch.cat(de_augm_policy, dim=0), dim=0, keepdim=True)
+        else:
+            policy = self.forward(state)
+
         proba = self.model.predict_proba(state, policy)
+
         return policy[0][0], proba[0][0]
 
-    def action(self, train=True):
+    def action(self, train=True, tta=False):
         eps = self.eps if train else 0
 
-        policy, proba = self.forward_state()
+        policy, proba = self.forward_state(tta=tta)
 
         action, i, j, exploit = self._calc_move(policy=policy, eps=eps)
         value = self._forward_action(i, j)
@@ -130,11 +148,14 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     if field is None:
         field = np.zeros((player_x.field.get_size(), ) * 2, dtype='float32')
     player_x.update_field(field=field)
-    player_o.update_field(field=field)
 
     is_x_next = player_x.field.next_action_id == 1
+
     player_act = player_x if is_x_next else player_o
     player_wait = player_o if is_x_next else player_x
+
+    tta_act = tta_x if is_x_next else tta_o
+    tta_wait = tta_o if is_x_next else tta_x
 
     s_history = []  # states
     f_history = []  # features
@@ -149,17 +170,20 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     while v is None:
         s_history.append(player_act.field.get_state())
         f_history.append(player_act.field.get_features())
-        q, p, a, e, v = player_act.action(train=True)
+        q, p, a, e, v = player_act.action(train=True, tta=tta_act)
         q_history.append(q)
         p_history.append(p)
         a_history.append(a)
         e_history.append(e)
 
         if v is None:
-            player_wait.update_field(field=player_act.field.get_state())
             player_temp = player_act
             player_act = player_wait
             player_wait = player_temp
+
+            tta_temp = tta_act
+            tta_act = tta_wait
+            tta_wait = tta_temp
 
     if v == 0:
         winner = 0
