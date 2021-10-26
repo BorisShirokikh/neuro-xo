@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import pygame
 import matplotlib.pyplot as plt
 from dpipe.torch import to_np, to_device, to_var
 
@@ -9,6 +10,11 @@ DIRECTIONS = ('row', 'col', 'diag', 'diag1')
 
 WIN_VALUE = 1
 DRAW_VALUE = 0
+
+WINDOW = 500
+BG_COLOR = (255, 255, 255)
+LINE_COLOR = CIRCLE_COLOR = CROSS_COLOR = (0, 0, 0)
+WIN_LINE_COLOR = (255, 0, 0)
 
 
 def _check_numpy_field(field: np.ndarray):
@@ -71,6 +77,8 @@ class Field:
         self._diag_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='diag'), device=check_device)
         self._diag1_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='diag1'), device=check_device)
 
+        self.square_size = WINDOW // self._n
+
     def _update_action_id(self):
         self.next_action_id = -self.next_action_id
         self._features = self._features[:, [1, 0, *range(2, self.n_features)], ...]
@@ -124,19 +132,30 @@ class Field:
     def check_draw(self):
         return not np.any(self._field == 0)
 
-    def check_win(self, _id=None):
+    def check_win(self, _id=None, return_how=False):
         t = (self._check_field == ((-self.next_action_id) if _id is None else _id)).float()
         k = self.kernel_len
 
-        if torch.any(self._row_kernel(t) >= k):
-            return True
-        if torch.any(self._col_kernel(t) >= k):
-            return True
-        if torch.any(self._diag_kernel(t) >= k):
-            return True
-        if torch.any(self._diag1_kernel(t) >= k):
-            return True
-        return False
+        is_win, by, at = False, None, None
+
+        by_row = self._row_kernel(t) >= k
+        by_col = self._col_kernel(t) >= k
+        by_diag = self._diag_kernel(t) >= k
+        by_diag1 = self._diag1_kernel(t) >= k
+
+        if torch.any(by_row):
+            is_win, by, at = True, 'row', list(by_row.nonzero()[0][2:] + torch.tensor([0, self.kernel_len // 2]))
+        if torch.any(by_col):
+            is_win, by, at = True, 'col', list(by_col.nonzero()[0][2:] + torch.tensor([self.kernel_len // 2, 0]))
+        if torch.any(by_diag):
+            print(by_diag.nonzero())
+            is_win, by, at = True, 'diag', list(
+                by_diag.nonzero()[0][2:] + torch.tensor([self.kernel_len // 2, self.kernel_len // 2]))
+        if torch.any(by_diag1):
+            is_win, by, at = True, 'diag1', list(
+                by_diag1.nonzero()[0][2:] + torch.tensor([self.kernel_len // 2, self.kernel_len // 2]))
+
+        return is_win, by, at if return_how else is_win
 
     def get_value(self, _id=None):
         depth = self.get_depth()
@@ -183,3 +202,65 @@ class Field:
         if colorbar:
             plt.colorbar()
         plt.show()
+
+    def draw_field(self, screen):
+        for i in range(1, self._n):
+            pygame.draw.line(screen, LINE_COLOR, (0, i * self.square_size), (WINDOW, i * self.square_size), 2)
+            pygame.draw.line(screen, LINE_COLOR, (i * self.square_size, 0), (i * self.square_size, WINDOW), 2)
+
+    def draw_figures(self, screen):
+        circle_radius, circle_width = 200 // self._n, 40 // self._n
+        cross_width, space = 50 // self._n, 10
+
+        for row in range(self._n):
+            for col in range(self._n):
+                if self._field[row][col] == 1:
+                    pygame.draw.line(
+                        screen,
+                        CROSS_COLOR,
+                        (col * self.square_size + space, (row + 1) * self.square_size - space),
+                        ((col + 1) * self.square_size - space, row * self.square_size + space),
+                        cross_width
+                    )
+
+                    pygame.draw.line(
+                        screen,
+                        CROSS_COLOR,
+                        (col * self.square_size + space, row * self.square_size + space),
+                        ((col + 1) * self.square_size - space, (row + 1) * self.square_size - space),
+                        cross_width
+                    )
+                elif self._field[row][col] == -1:
+                    pygame.draw.circle(
+                        screen,
+                        CIRCLE_COLOR,
+                        (int(col * self.square_size + self.square_size // 2),
+                         int(row * self.square_size + self.square_size // 2)),
+                        circle_radius,
+                        circle_width
+                    )
+
+    def draw_winning_line(self, screen, by, at):
+        row, col = at
+
+        offset = self.square_size // 2
+
+        posX = col * self.square_size + offset
+        posY = row * self.square_size + offset
+
+        if by == 'row':
+            start = (posX - (self.kernel_len // 2) * self.square_size, posY)
+            stop = (posX + (self.kernel_len // 2) * self.square_size, posY)
+        elif by == 'col':
+            start = (posX, posY - (self.kernel_len // 2) * self.square_size)
+            stop = (posX, posY + (self.kernel_len // 2) * self.square_size)
+        elif by == 'diag':
+            start = (posX - (self.kernel_len // 2) * self.square_size, posY - (self.kernel_len // 2) * self.square_size)
+            stop = (posX + (self.kernel_len // 2) * self.square_size, posY + (self.kernel_len // 2) * self.square_size)
+        elif by == 'diag1':
+            start = (posX + (self.kernel_len // 2) * self.square_size, posY - (self.kernel_len // 2) * self.square_size)
+            stop = (posX - (self.kernel_len // 2) * self.square_size, posY + (self.kernel_len // 2) * self.square_size)
+        else:
+            raise IndexError('Unexpected winning position')
+
+        pygame.draw.line(screen, WIN_LINE_COLOR, start, stop, 4)
