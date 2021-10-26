@@ -45,7 +45,7 @@ if __name__ == '__main__':
     field.draw_field(screen)
 
     model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
-    model_path = Q_EXP_PATH / 'q8_test'
+    model_path = Q_EXP_PATH / exp_name
     load_model_state(model, model_path / choose_model(model_path))
 
     a = None
