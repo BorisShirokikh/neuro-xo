@@ -135,7 +135,7 @@ class Field:
         t = (self._check_field == ((-self.next_action_id) if _id is None else _id)).float()
         k = self.kernel_len
 
-        is_win, by, offset = False, None, None
+        is_win, by, at = False, None, None
 
         by_row = self._row_kernel(t) >= k
         by_col = self._col_kernel(t) >= k
@@ -143,15 +143,19 @@ class Field:
         by_diag1 = self._diag1_kernel(t) >= k
 
         if torch.any(by_row):
-            is_win, by, offset = True, 'row', np.array([0, self.kernel_len // 2])
+            center = to_np(by_row.nonzero()[0][2:])
+            is_win, by, at = True, 'row', center + np.array([0, self.kernel_len // 2])
         if torch.any(by_col):
-            is_win, by, offset = True, 'col', np.array([self.kernel_len // 2, 0])
+            center = to_np(by_col.nonzero()[0][2:])
+            is_win, by, at = True, 'col', center + np.array([self.kernel_len // 2, 0])
         if torch.any(by_diag):
-            is_win, by, offset = True, 'diag', np.array([self.kernel_len // 2, self.kernel_len // 2])
+            center = to_np(by_diag.nonzero()[0][2:])
+            is_win, by, at = True, 'diag', center + np.array([self.kernel_len // 2, self.kernel_len // 2])
         if torch.any(by_diag1):
-            is_win, by, offset = True, 'diag1', np.array([self.kernel_len // 2, self.kernel_len // 2])
+            center = to_np(by_diag1.nonzero()[0][2:])
+            is_win, by, at = True, 'diag1', center + np.array([self.kernel_len // 2, self.kernel_len // 2])
 
-        return (is_win, by, list(to_np(by_row.nonzero()[0][2:]) + offset)) if return_how else is_win
+        return (is_win, by, at) if return_how else is_win
 
     def get_value(self, _id=None):
         depth = self.get_depth()
