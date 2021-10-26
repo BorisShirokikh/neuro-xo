@@ -6,7 +6,9 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike
 from dpipe.torch import to_var, save_model_state
 
-from ttt_lib.policy_player import PolicyPlayer, validate, play_self_game
+from ttt_lib.self_games import play_self_game
+from ttt_lib.validate import validate
+from ttt_lib.policy_player import PolicyPlayer
 from ttt_lib.torch.model import optimizer_step
 
 

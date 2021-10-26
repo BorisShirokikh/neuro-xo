@@ -6,8 +6,10 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike
 from dpipe.torch import to_var, save_model_state
 
-from ttt_lib.policy_player import PolicyPlayer, play_self_game, validate
+from ttt_lib.policy_player import PolicyPlayer
+from ttt_lib.self_games import play_self_game
 from ttt_lib.torch.model import optimizer_step
+from ttt_lib.validate import validate
 
 
 def train_tree_backup(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,

@@ -4,8 +4,8 @@ from collections import defaultdict
 import numpy as np
 
 
-def get_running_mean_hash_table():
-    return defaultdict(lambda: defaultdict(float))
+def get_hash_table():
+    return defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
 
 
 def update_running_mean_hash_table(ht, h, v, key_m='running_mean', key_n='n'):
@@ -22,7 +22,7 @@ def field2hashable(field):
 
 
 def sort_and_clear_running_mean_hash_table(ht, key_n='n', hashes_to_leave=1000):
-    ht_new = get_running_mean_hash_table()
+    ht_new = get_hash_table()
     hashes_sorted = sorted(ht, key=lambda _h: ht[_h][key_n], reverse=True)
     for h in hashes_sorted[:hashes_to_leave]:
         ht_new[h] = ht[h]

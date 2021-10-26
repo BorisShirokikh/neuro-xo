@@ -9,6 +9,7 @@ from dpipe.io import choose_existing
 from dpipe.torch import load_model_state
 
 from ttt_lib.field import Field, WINDOW, BG_COLOR
+from ttt_lib.monte_carlo_tree_search import mcts_action, run_search
 from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light
 from ttt_lib.q_learning import PolicyPlayer
 from ttt_lib.utils import choose_model
@@ -32,6 +33,9 @@ if __name__ == '__main__':
     while exp_name not in available_exp_names:
         print(f'There is no {exp_name} model. Please choose from the available.')
         exp_name = input()
+
+    print(f'Input the search time (int):')
+    search_time = int(input())
 
     n, kernel_len = 10, 5
     device = 'cpu'
@@ -60,7 +64,8 @@ if __name__ == '__main__':
         for event in pygame.event.get():
             if not game_over:
                 if player.field.next_action_id == player_1:
-                    q, p, a, v, e = player.action(train=False)
+                    _, _, a, v, _ = mcts_action(player=player, root=run_search(player=player, search_time=search_time))
+                    # q, p, a, v, e = player.action(train=False)
                 else:
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         mouseX = event.pos[0]
