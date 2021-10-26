@@ -7,8 +7,10 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import choose_existing
 from dpipe.torch import save_model_state, load_model_state
 
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light
-from ttt_lib.q_learning import PolicyPlayer, train_q_learning
+from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light, PolicyNetworkQ10
+from ttt_lib.policy_player import PolicyPlayer
+from ttt_lib.q_learning import train_q_learning
+from ttt_lib.off_policy_tree_backup import train_tree_backup
 from ttt_lib.field import Field
 
 
@@ -21,6 +23,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--exp_name', required=True, type=str)
+    parser.add_argument('--method', required=True, type=str, choices=('q_learning', 'tree_backup'))
     parser.add_argument('--n_step_q', required=True, type=int)
     parser.add_argument('--lam', required=False, type=float, default=None)
 
@@ -28,6 +31,8 @@ if __name__ == '__main__':
 
     parser.add_argument('--duel_name', required=False, type=str, default=None)
     parser.add_argument('--preload_path', required=False, type=str, default=None)
+
+    parser.add_argument('--large_model', required=False, action='store_true', default=False)
 
     args = parser.parse_known_args()[0]
 
@@ -53,22 +58,32 @@ if __name__ == '__main__':
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
     cnn_features = (128, 64)
-    model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
+    if args.large_model:
+        model = PolicyNetworkQ10(n=n, structure=cnn_features)
+    else:
+        model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
 
     preload_path = args.preload_path
     if preload_path is not None:
         load_model_state(model, preload_path)
 
-    n_episodes = 600000
+    n_episodes = 2000000
     eps_init = 0.5
-    ep2eps = {int(1e5): 0.4, int(2e5): 0.3, int(3e5): 0.3, int(4e5): 0.2, int(5e5): 0.1, }
+    ep2eps = {int(7e5): 0.4, int(10e5): 0.3, int(12e5): 0.3, int(14e5): 0.2, int(16e5): 0.1, }
 
     player = PolicyPlayer(model=model, field=field, eps=eps_init, device=device)
 
     # TRAIN:
-    train_q_learning(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q, lam=lam,
-                     ep2eps=ep2eps, lr=lr,
-                     episodes_per_epoch=10000, n_duels=100, episodes_per_model_save=10000,
-                     duel_path=duel_path)
+    method = args.method
+    if method == 'q_learning':
+        train_q_learning(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q, lam=lam,
+                         ep2eps=ep2eps, lr=lr,
+                         episodes_per_epoch=10000, n_duels=100, episodes_per_model_save=10000,
+                         duel_path=duel_path)
+    elif method == 'tree_backup':
+        train_tree_backup(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q, lam=lam,
+                          ep2eps=ep2eps, lr=lr,
+                          episodes_per_epoch=10000, n_duels=100, episodes_per_model_save=10000,
+                          duel_path=duel_path)
     # SAVE:
     save_model_state(player.model, exp_path / 'model.pth')

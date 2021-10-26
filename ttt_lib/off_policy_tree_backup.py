@@ -6,15 +6,15 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike
 from dpipe.torch import to_var, save_model_state
 
-from ttt_lib.policy_player import PolicyPlayer, validate, play_self_game
+from ttt_lib.policy_player import PolicyPlayer, play_self_game, validate
 from ttt_lib.torch.model import optimizer_step
 
 
-def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,
-                     augm: bool = True, n_step_q: int = 2, lam: float = None, sigma_p: float = 0.5,
-                     ep2eps: dict = None, lr: float = 4e-3,
-                     episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
-                     duel_path: PathLike = None):
+def train_tree_backup(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,
+                      augm: bool = True, n_step_q: int = 8, lam: float = None,
+                      ep2eps: dict = None, lr: float = 4e-3,
+                      episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
+                      duel_path: PathLike = None):
     """
     Params
     ------
@@ -27,7 +27,6 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
         If `n_step_q=0`, `n_step_q` is being drawn from the Poisson distribution with `lam=lam` for the episode.
         If `n_step_q=-1`, `n_step_q` is being drawn from the Poisson distribution with `lam=lam` for every iteration.
     lam: float
-    sigma: float, optional. # TODO: is not implemented yet.
     ep2eps: dict
     lr: float
     episodes_per_epoch: int
@@ -50,8 +49,6 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
         s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, value\
             = play_self_game(player=player, augm=augm)
 
-        sigmas = np.random.binomial(size=len(a_history), n=1, p=sigma_p)
-
         if n_step_q > 0:
             _n_step_qs = [n_step_q, ] * len(a_history)
         elif n_step_q == 0:
@@ -66,24 +63,13 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
         loss.to(player.device)
 
         rev_a_history = a_history[::-1]
-        rev_e_history = e_history[::-1]
         rev_q_history = torch.flip(qs_pred, dims=(0, ))
         rev_q_max_history = q_max_history[::-1]
-
         for t_rev, (a, q, _n_step_q) in enumerate(zip(rev_a_history, rev_q_history, _n_step_qs)):
-            q_star = 0
-            for k in range(max(0, t_rev - _n_step_q + 1), t_rev + 1):
-                if k == 0:
-                    q_star = value
-                else:
-                    n_actions = n ** 2 - len(a_history) + t_rev + 1
-
-                    pi = 1 if rev_e_history[k] else 0
-                    rho = n_actions / (n_actions * (1 - player.eps) + player.eps) if rev_e_history[k] else 0
-
-                    q_star = - (rev_q_max_history[k]
-                                + (sigmas[k] * rho + (1 - sigmas[k]) * pi) * (q_star - rev_q_max_history[k]))
-
+            if t_rev < _n_step_q:
+                q_star = (-1) ** t_rev * value
+            else:
+                q_star = (-1) ** _n_step_q * rev_q_max_history[t_rev - _n_step_q]
             loss = loss + .5 * (q[a // n, a % n] - q_star) ** 2
 
         optimizer_step(optimizer=optimizer, loss=loss)

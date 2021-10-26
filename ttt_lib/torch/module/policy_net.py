@@ -94,7 +94,6 @@ class PolicyNetworkQ10(nn.Module):
             ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
             ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
             ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
-            ResBlock2d(n_features, n_features, kernel_size=3, padding=1, batch_norm_module=nn.Identity),
             # policy head
             nn.Conv2d(n_features, n_features_policy, kernel_size=1, padding=0, bias=False),
             nn.ReLU(inplace=True),
