@@ -38,20 +38,18 @@ class PolicyPlayer:
 
         avail_p = policy.reshape(-1)[avail_actions]
         argmax_avail_action_idx = random.choice(torch.where(avail_p == avail_p.max(), 1., 0.).nonzero()).item()
-        exploitative = True
+        exploit = True
 
         if eps > 0:
             soft_p = np.zeros(n_actions) + eps / n_actions
             soft_p[argmax_avail_action_idx] += (1 - eps)
             soft_p_action_idx = np.random.choice(np.arange(n_actions), p=soft_p)
-
-            if soft_p_action_idx != argmax_avail_action_idx:
-                exploitative = False
-                argmax_avail_action_idx = soft_p_action_idx
+            exploit = (soft_p_action_idx == argmax_avail_action_idx)
+            argmax_avail_action_idx = soft_p_action_idx
 
         action = avail_actions[argmax_avail_action_idx].item()
 
-        return action, action // self.n, action % self.n, exploitative
+        return action, action // self.n, action % self.n, exploit
 
     def eval(self):
         self.model.eval()
@@ -73,10 +71,10 @@ class PolicyPlayer:
 
         policy, proba = self.forward_state()
 
-        action, i, j, exploitative = self._calc_move(policy=policy, eps=eps)
+        action, i, j, exploit = self._calc_move(policy=policy, eps=eps)
         value = self._forward_action(i, j)
 
-        return policy, proba, action, value, exploitative
+        return policy, proba, action, exploit, value
 
     def manual_action(self, i, j):
         # compatibility with `action` output:
@@ -88,7 +86,7 @@ class PolicyPlayer:
 
         value = self._forward_action(i, j)
 
-        return policy_manual, proba_manual, action, value, None
+        return policy_manual, proba_manual, action, None, value
 
     def update_field(self, field):
         self.field.set_state(field=field)
@@ -105,7 +103,7 @@ def play_self_game(player, field=None, train=True, augm=True):
     s_history = []      # states
     f_history = []      # features
     a_history = []      # actions
-    e_history = []      # exploitations
+    e_history = []      # exploits
     q_history = []      # policies
     q_max_history = []  # max Q values
     p_history = []      # probas
@@ -115,7 +113,7 @@ def play_self_game(player, field=None, train=True, augm=True):
     while v is None:
         s_history.append(player.field.get_state())
         f_history.append(player.field.get_features())
-        q, p, a, v, e = player.action(train=train)
+        q, p, a, e, v = player.action(train=train)
         q_history.append(q)
         q_max_history.append(q[p > 0].max().item())
         p_history.append(p)
@@ -151,7 +149,7 @@ def play_duel(player_x, player_o, field=None, return_result_only=False):
     while v is None:
         s_history.append(player_act.field.get_state())
         f_history.append(player_act.field.get_features())
-        q, p, a, v, e = player_act.action(train=True)
+        q, p, a, e, v = player_act.action(train=True)
         q_history.append(q)
         p_history.append(p)
         a_history.append(a)
