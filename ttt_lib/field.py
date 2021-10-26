@@ -147,7 +147,6 @@ class Field:
         if torch.any(by_col):
             is_win, by, offset = True, 'col', np.array([self.kernel_len // 2, 0])
         if torch.any(by_diag):
-            print(by_diag.nonzero())
             is_win, by, offset = True, 'diag', np.array([self.kernel_len // 2, self.kernel_len // 2])
         if torch.any(by_diag1):
             is_win, by, offset = True, 'diag1', np.array([self.kernel_len // 2, self.kernel_len // 2])
