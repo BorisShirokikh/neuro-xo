@@ -5,7 +5,6 @@ import pygame
 import matplotlib.pyplot as plt
 from dpipe.torch import to_np, to_device, to_var
 
-
 DIRECTIONS = ('row', 'col', 'diag', 'diag1')
 
 WIN_VALUE = 1
@@ -33,7 +32,7 @@ def get_check_kernel(kernel_len=5, direction='row'):
         kernel_w = torch.tensor(np.array([[np.eye(kernel_len, dtype=np.float32)]]))
         kernel = nn.Conv2d(1, 1, kernel_len, bias=False)
         if '1' in direction:
-            kernel.weight = nn.Parameter(kernel_w.flip(dims=(-1, )), requires_grad=False)
+            kernel.weight = nn.Parameter(kernel_w.flip(dims=(-1,)), requires_grad=False)
         else:
             kernel.weight = nn.Parameter(kernel_w, requires_grad=False)
         kernel.eval()
@@ -88,11 +87,11 @@ class Field:
         field = self._field if field is None else np.copy(field)
         next_action_id = 1 if (self.get_depth(field) % 2 == 0) else -1
         features = np.float32(np.concatenate((
-            (field == next_action_id)[None, None],        # is player?      {0, 1}
-            (field == -next_action_id)[None, None],       # is opponent?    {0, 1}
-            np.zeros_like(field)[None, None],             # zeros plane     {0}
-            np.ones_like(field)[None, None],              # ones plane      {1}
-            (field == 0)[None, None],                     # is legal move?  {0, 1}
+            (field == next_action_id)[None, None],  # is player?      {0, 1}
+            (field == -next_action_id)[None, None],  # is opponent?    {0, 1}
+            np.zeros_like(field)[None, None],  # zeros plane     {0}
+            np.ones_like(field)[None, None],  # ones plane      {1}
+            (field == 0)[None, None],  # is legal move?  {0, 1}
         ), axis=1))
         return features
 
@@ -136,7 +135,7 @@ class Field:
         t = (self._check_field == ((-self.next_action_id) if _id is None else _id)).float()
         k = self.kernel_len
 
-        is_win, by, at = False, None, None
+        is_win, by, offset = False, None, None
 
         by_row = self._row_kernel(t) >= k
         by_col = self._col_kernel(t) >= k
@@ -144,18 +143,16 @@ class Field:
         by_diag1 = self._diag1_kernel(t) >= k
 
         if torch.any(by_row):
-            is_win, by, at = True, 'row', list(by_row.nonzero()[0][2:] + torch.tensor([0, self.kernel_len // 2]))
+            is_win, by, offset = True, 'row', np.array([0, self.kernel_len // 2])
         if torch.any(by_col):
-            is_win, by, at = True, 'col', list(by_col.nonzero()[0][2:] + torch.tensor([self.kernel_len // 2, 0]))
+            is_win, by, offset = True, 'col', np.array([self.kernel_len // 2, 0])
         if torch.any(by_diag):
             print(by_diag.nonzero())
-            is_win, by, at = True, 'diag', list(
-                by_diag.nonzero()[0][2:] + torch.tensor([self.kernel_len // 2, self.kernel_len // 2]))
+            is_win, by, offset = True, 'diag', np.array([self.kernel_len // 2, self.kernel_len // 2])
         if torch.any(by_diag1):
-            is_win, by, at = True, 'diag1', list(
-                by_diag1.nonzero()[0][2:] + torch.tensor([self.kernel_len // 2, self.kernel_len // 2]))
+            is_win, by, offset = True, 'diag1', np.array([self.kernel_len // 2, self.kernel_len // 2])
 
-        return is_win, by, at if return_how else is_win
+        return is_win, by, list(to_np(by_row.nonzero()[0][2:]) + offset) if return_how else is_win
 
     def get_value(self, _id=None):
         depth = self.get_depth()
