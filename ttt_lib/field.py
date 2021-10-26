@@ -151,7 +151,7 @@ class Field:
         if torch.any(by_diag1):
             is_win, by, offset = True, 'diag1', np.array([self.kernel_len // 2, self.kernel_len // 2])
 
-        return is_win, by, list(to_np(by_row.nonzero()[0][2:]) + offset) if return_how else is_win
+        return (is_win, by, list(to_np(by_row.nonzero()[0][2:]) + offset)) if return_how else is_win
 
     def get_value(self, _id=None):
         depth = self.get_depth()
