@@ -13,15 +13,15 @@ Code for the final project within the Reinforcement Learning 2021 course at Skol
 
 ## Repository Structure
 ```
-├── models                                                 # pre-trained agents to play with
+├── models                  # pre-trained agents to play with
 │   └── ...
-├── notebooks                                              # experiment results evaluation
+├── notebooks               # experiment results evaluation
 │   └── ...
 ├── scripts
-│   ├── q_learn_*x*.py                                     # dfferent field size model training
-│   └── q_play_10x10.py                                    # manual playing against the pre-trained model
+│   ├── q_learn_*x*.py      # dfferent field size model training
+│   └── q_play_10x10.py     # manual playing against the pre-trained model
 │
-└── ttt_lib                                                # project's library
+└── ttt_lib                 # project's library
     └── ...
 ```
 
