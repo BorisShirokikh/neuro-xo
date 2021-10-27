@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', required=False, type=float, default=1e-5)
     parser.add_argument('--eps', required=False, type=float, default=0.5)
     parser.add_argument('--episodes', required=False, type=int, default=1000000)
+    parser.add_argument('--random_start', required=False, action='store_true', default=False)
 
     parser.add_argument('--duel_name', required=False, type=str, default=None)
     parser.add_argument('--preload_path', required=False, type=str, default=None)
@@ -84,6 +85,7 @@ if __name__ == '__main__':
                          duel_path=duel_path)
     elif method == 'tree_backup':
         train_tree_backup(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q, lam=lam,
+                          random_start=args.random_start,
                           ep2eps=ep2eps, lr=lr,
                           episodes_per_epoch=10000, n_duels=100, episodes_per_model_save=10000,
                           duel_path=duel_path)

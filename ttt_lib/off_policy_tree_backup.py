@@ -9,11 +9,12 @@ from dpipe.torch import to_var, save_model_state
 from ttt_lib.policy_player import PolicyPlayer
 from ttt_lib.self_games import play_self_game
 from ttt_lib.torch.model import optimizer_step
+from ttt_lib.utils import get_random_field
 from ttt_lib.validate import validate
 
 
 def train_tree_backup(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,
-                      augm: bool = True, n_step_q: int = 8, lam: float = None,
+                      augm: bool = True, n_step_q: int = 8, lam: float = None, random_start: bool = False,
                       ep2eps: dict = None, lr: float = 4e-3,
                       episodes_per_epoch: int = 10000, n_duels: int = 1000, episodes_per_model_save: int = 100000,
                       duel_path: PathLike = None):
@@ -48,8 +49,15 @@ def train_tree_backup(player: PolicyPlayer, logger: SummaryWriter, exp_path: Pat
     ep2eps_items = None if ep2eps is None else list(ep2eps.items())
     for ep in trange(n_episodes):
 
+        init_field = None
+        if random_start:
+            init_field = get_random_field(n=n, min_depth=0, max_depth=10)
+
         s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, value\
-            = play_self_game(player=player, augm=augm)
+            = play_self_game(player=player, field=init_field, augm=augm)
+
+        if len(s_history) == 0:
+            continue
 
         if n_step_q > 0:
             _n_step_qs = [n_step_q, ] * len(a_history)

@@ -21,7 +21,8 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
     p_history = []      # probas
 
     player.eval()
-    v = None  # v -- value
+    v = player.field.get_value()  # value
+    # v = None
     while v is None:
         s_history.append(player.field.get_state())
         f_history.append(player.field.get_features())
@@ -44,7 +45,7 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
 
 
 def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=False, tta_o=False,
-              mcts=False, **mcts_kwargs):
+              mcts_x=False, mcts_o=False, search_time_x=10, search_time_o=10):
     if field is None:
         field = np.zeros((player_x.field.get_size(), ) * 2, dtype='float32')
     player_x.update_field(field=field)
@@ -57,6 +58,12 @@ def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=Fa
     tta_act = tta_x if is_x_next else tta_o
     tta_wait = tta_o if is_x_next else tta_x
 
+    mcts_act = mcts_x if is_x_next else mcts_o
+    mcts_wait = mcts_o if is_x_next else mcts_x
+
+    search_time_act = search_time_x if is_x_next else search_time_o
+    search_time_wait = search_time_o if is_x_next else search_time_x
+
     s_history = []  # states
     f_history = []  # features
     a_history = []  # actions
@@ -66,13 +73,14 @@ def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=Fa
 
     player_act.eval()
     player_wait.eval()
-    v = None  # v -- value
+    v = player.field.get_value()  # value
     while v is None:
         s_history.append(player_act.field.get_state())
         f_history.append(player_act.field.get_features())
 
-        if mcts:
-            q, p, a, e, v = mcts_action(player=player_act, root=run_search(player=player_act, **mcts_kwargs))
+        if mcts_act:
+            q, p, a, e, v = mcts_action(player=player_act,
+                                        root=run_search(player=player_act, search_time=search_time_act))
         else:
             q, p, a, e, v = player_act.action(train=True, tta=tta_act)
 
@@ -82,13 +90,10 @@ def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=Fa
         e_history.append(e)
 
         if v is None:
-            player_temp = player_act
-            player_act = player_wait
-            player_wait = player_temp
-
-            tta_temp = tta_act
-            tta_act = tta_wait
-            tta_wait = tta_temp
+            player_act, player_wait = player_wait, player_act
+            tta_act, tta_wait = tta_wait, tta_act
+            mcts_act, mcts_wait = mcts_wait, mcts_act
+            search_time_act, search_time_wait = search_time_wait, search_time_act
 
     if v == 0:
         winner = 0
