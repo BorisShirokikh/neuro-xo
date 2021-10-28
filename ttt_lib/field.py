@@ -5,6 +5,7 @@ import pygame
 import matplotlib.pyplot as plt
 from dpipe.torch import to_np, to_device, to_var
 
+
 DIRECTIONS = ('row', 'col', 'diag', 'diag1')
 
 WIN_VALUE = 1
@@ -143,7 +144,7 @@ class Field:
         by_diag1 = self._diag1_kernel(t) >= k
 
         if torch.any(by_row):
-            center = to_np(by_row.nonzero()[0][2:])
+            center = to_np(torch.nonzero(by_row)[0][2:])
             is_win, by, at = True, 'row', center + np.array([0, self.kernel_len // 2])
         if torch.any(by_col):
             center = to_np(by_col.nonzero()[0][2:])

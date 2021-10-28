@@ -44,11 +44,13 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
     return s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, v
 
 
-def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=False, tta_o=False,
-              mcts_x=False, mcts_o=False, search_time_x=10, search_time_o=10):
+def play_duel(player_x, player_o, field=None, same_field_module=True, return_result_only=False,
+              tta_x=False, tta_o=False, mcts_x=False, mcts_o=False, search_time_x=10, search_time_o=10):
     if field is None:
         field = np.zeros((player_x.field.get_size(), ) * 2, dtype='float32')
     player_x.update_field(field=field)
+    if not same_field_module:
+        player_o.update_field(field=field)
 
     is_x_next = player_x.field.next_action_id == 1
 
@@ -73,7 +75,7 @@ def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=Fa
 
     player_act.eval()
     player_wait.eval()
-    v = player.field.get_value()  # value
+    v = player_act.field.get_value()  # value
     while v is None:
         s_history.append(player_act.field.get_state())
         f_history.append(player_act.field.get_features())
@@ -83,6 +85,9 @@ def play_duel(player_x, player_o, field=None, return_result_only=False, tta_x=Fa
                                         root=run_search(player=player_act, search_time=search_time_act))
         else:
             q, p, a, e, v = player_act.action(train=True, tta=tta_act)
+
+        if not same_field_module:
+            player_wait.update_field(player_wait.field.get_state())
 
         q_history.append(q)
         p_history.append(p)

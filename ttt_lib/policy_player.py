@@ -30,7 +30,8 @@ class PolicyPlayer:
         n_actions = len(avail_actions)
 
         avail_p = policy.reshape(-1)[avail_actions]
-        argmax_avail_action_idx = random.choice(torch.where(avail_p == avail_p.max(), 1., 0.).nonzero()).item()
+        argmax_avail_action_idx = random.choice(
+            torch.nonzero(torch.where(avail_p == avail_p.max(), 1., 0.))).item()
         exploit = True
 
         if eps > 0:
