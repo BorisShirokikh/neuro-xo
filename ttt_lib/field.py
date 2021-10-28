@@ -147,13 +147,13 @@ class Field:
             center = to_np(torch.nonzero(by_row)[0][2:])
             is_win, by, at = True, 'row', center + np.array([0, self.kernel_len // 2])
         if torch.any(by_col):
-            center = to_np(by_col.nonzero()[0][2:])
+            center = to_np(torch.nonzero(by_col)[0][2:])
             is_win, by, at = True, 'col', center + np.array([self.kernel_len // 2, 0])
         if torch.any(by_diag):
-            center = to_np(by_diag.nonzero()[0][2:])
+            center = to_np(torch.nonzero(by_diag)[0][2:])
             is_win, by, at = True, 'diag', center + np.array([self.kernel_len // 2, self.kernel_len // 2])
         if torch.any(by_diag1):
-            center = to_np(by_diag1.nonzero()[0][2:])
+            center = to_np(torch.nonzero(by_diag1)[0][2:])
             is_win, by, at = True, 'diag1', center + np.array([self.kernel_len // 2, self.kernel_len // 2])
 
         return (is_win, by, at) if return_how else is_win
@@ -246,21 +246,25 @@ class Field:
 
         offset = self.square_size // 2
 
-        posX = col * self.square_size + offset
-        posY = row * self.square_size + offset
+        pos_x = col * self.square_size + offset
+        pos_y = row * self.square_size + offset
 
         if by == 'row':
-            start = (posX - (self.kernel_len // 2) * self.square_size, posY)
-            stop = (posX + (self.kernel_len // 2) * self.square_size, posY)
+            start = (pos_x - (self.kernel_len // 2) * self.square_size, pos_y)
+            stop = (pos_x + (self.kernel_len // 2) * self.square_size, pos_y)
         elif by == 'col':
-            start = (posX, posY - (self.kernel_len // 2) * self.square_size)
-            stop = (posX, posY + (self.kernel_len // 2) * self.square_size)
+            start = (pos_x, pos_y - (self.kernel_len // 2) * self.square_size)
+            stop = (pos_x, pos_y + (self.kernel_len // 2) * self.square_size)
         elif by == 'diag':
-            start = (posX - (self.kernel_len // 2) * self.square_size, posY - (self.kernel_len // 2) * self.square_size)
-            stop = (posX + (self.kernel_len // 2) * self.square_size, posY + (self.kernel_len // 2) * self.square_size)
+            start = (pos_x - (self.kernel_len // 2) * self.square_size,
+                     pos_y - (self.kernel_len // 2) * self.square_size)
+            stop = (pos_x + (self.kernel_len // 2) * self.square_size,
+                    pos_y + (self.kernel_len // 2) * self.square_size)
         elif by == 'diag1':
-            start = (posX + (self.kernel_len // 2) * self.square_size, posY - (self.kernel_len // 2) * self.square_size)
-            stop = (posX - (self.kernel_len // 2) * self.square_size, posY + (self.kernel_len // 2) * self.square_size)
+            start = (pos_x + (self.kernel_len // 2) * self.square_size,
+                     pos_y - (self.kernel_len // 2) * self.square_size)
+            stop = (pos_x - (self.kernel_len // 2) * self.square_size,
+                    pos_y + (self.kernel_len // 2) * self.square_size)
         else:
             raise IndexError('Unexpected winning position')
 

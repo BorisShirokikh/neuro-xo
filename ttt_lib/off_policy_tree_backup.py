@@ -51,7 +51,8 @@ def train_tree_backup(player: PolicyPlayer, logger: SummaryWriter, exp_path: Pat
 
         init_field = None
         if random_start:
-            init_field = get_random_field(n=n, min_depth=0, max_depth=10)
+            if np.random.random_sample() < player.eps:
+                init_field = get_random_field(n=n, min_depth=0, max_depth=10)
 
         s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, value\
             = play_self_game(player=player, field=init_field, augm=augm)
