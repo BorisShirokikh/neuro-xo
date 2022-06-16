@@ -6,7 +6,7 @@ from ttt_lib.monte_carlo_tree_search import run_search, mcts_action
 
 def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts_kwargs):
     if field is None:
-        field = np.zeros((player.field.get_size(), ) * 2, dtype='float32')
+        field = np.zeros((player.field.get_n(), ) * 2, dtype='float32')
     player.update_field(field=field)
 
     if not train:
@@ -24,7 +24,7 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
     v = player.field.get_value()  # value
     # v = None
     while v is None:
-        s_history.append(player.field.get_state())
+        s_history.append(player.field.get_field())
         f_history.append(player.field.get_features())
 
         if mcts:
@@ -39,7 +39,7 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
         e_history.append(e)
 
         if augm:
-            player.update_field(augm_spatial(player.field.get_state()))
+            player.update_field(augm_spatial(player.field.get_field()))
 
     return s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, v
 
@@ -47,7 +47,7 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
 def play_duel(player_x, player_o, field=None, same_field_module=True, return_result_only=False,
               tta_x=False, tta_o=False, mcts_x=False, mcts_o=False, search_time_x=10, search_time_o=10):
     if field is None:
-        field = np.zeros((player_x.field.get_size(), ) * 2, dtype='float32')
+        field = np.zeros((player_x.field.get_n(), ) * 2, dtype='float32')
     player_x.update_field(field=field)
     if not same_field_module:
         player_o.update_field(field=field)
@@ -77,7 +77,7 @@ def play_duel(player_x, player_o, field=None, same_field_module=True, return_res
     player_wait.eval()
     v = player_act.field.get_value()  # value
     while v is None:
-        s_history.append(player_act.field.get_state())
+        s_history.append(player_act.field.get_field())
         f_history.append(player_act.field.get_features())
 
         if mcts_act:
@@ -87,7 +87,7 @@ def play_duel(player_x, player_o, field=None, same_field_module=True, return_res
             q, p, a, e, v = player_act.action(train=True, tta=tta_act)
 
         if not same_field_module:
-            player_wait.update_field(player_wait.field.get_state())
+            player_wait.update_field(player_wait.field.get_field())
 
         q_history.append(q)
         p_history.append(p)

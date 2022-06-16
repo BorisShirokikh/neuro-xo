@@ -33,7 +33,7 @@ def calc_classical_ucb(tree, h, n, c=5, n_key='n'):
 
 def play_search_game(player, tree, n, field=None, tta=False):
     if field is None:
-        field = np.zeros((player.field.get_size(), ) * 2, dtype='float32')
+        field = np.zeros((player.field.get_n(), ) * 2, dtype='float32')
     player.update_field(field=field)
 
     s_history = []      # state hashes
@@ -44,7 +44,7 @@ def play_search_game(player, tree, n, field=None, tta=False):
     player.eval()
     v = None  # v -- value
     while v is None:
-        h = hash(make_state_hashable(player.field.get_state()))
+        h = hash(make_state_hashable(player.field.get_field()))
         q_est, u = calc_alpha_go_ucb(tree=tree, h=h, n=n)
         q_est, u = to_var(q_est, device=player.device), to_var(u, device=player.device)
         q, p, a, _, v = player.ucb_action(q_est, u, tta=tta)
@@ -58,11 +58,11 @@ def play_search_game(player, tree, n, field=None, tta=False):
 
 
 def run_search(player: PolicyPlayer, search_time=60, n_key='n', sum_key='sum', return_tree=False):
-    n = player.field.get_size()
-    root_field = player.field.get_state()
+    n = player.field.get_n()
+    root_field = player.field.get_field()
 
-    search_field = Field(n=player.field.get_size(), kernel_len=player.field.kernel_len,
-                         field=player.field.get_state(), device=player.device, check_device=player.device)
+    search_field = Field(n=player.field.get_n(), kernel_len=player.field.kernel_len,
+                         field=player.field.get_field(), device=player.device, check_device=player.device)
     search_player = PolicyPlayer(model=deepcopy(player.model), field=search_field, device=player.device)
 
     tree = get_hash_table()

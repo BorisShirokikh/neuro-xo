@@ -1,20 +1,205 @@
+from typing import Union
+
 import torch
 import torch.nn as nn
 import numpy as np
-import pygame
-import matplotlib.pyplot as plt
+
 from dpipe.torch import to_np, to_device, to_var
 
 
 DIRECTIONS = ('row', 'col', 'diag', 'diag1')
 
+EMPTY_ID = 0
+X_ID = 1
+O_ID = -1
+
 WIN_VALUE = 1
 DRAW_VALUE = 0
 
-WINDOW = 500
-BG_COLOR = (255, 255, 255)
-LINE_COLOR = CIRCLE_COLOR = CROSS_COLOR = (0, 0, 0)
-WIN_LINE_COLOR = (255, 0, 0)
+
+class Field:
+    def __init__(self, n: int = 10, kernel_len: int = 5, field: Union[np.ndarray, torch.Tensor] = None,
+                 device: str = 'cpu', check_device: str = 'cpu'):
+        # Player0 = 'x', it's player_id (action_id) = 1 = X_ID
+        # Player1 = '0', it's player_id (action_id) = -1 = O_ID
+        # For the empty field (default init) Player0 is the first to move:
+        self._action_id = X_ID
+
+        # Field init
+        if field is None:  # Default (empty) field init
+            self._field = np.zeros((n, n), dtype='float32')
+            self._n = n
+        else:  # Init field from passed array (np or torch)
+            if not isinstance(field, np.ndarray):
+                field = to_np(field)
+            _check_numpy_field(field)
+            self._field = np.copy(np.float32(field))
+            self._n = self._field.shape[0]
+            self._action_id = self._get_action_id()
+
+        # Condition to win init
+        self.kernel_len = kernel_len
+
+        # Check win algorithm init
+        self.check_device = check_device
+        self._check_field = self._get_check_field()
+        self._row_kernel = to_device(_get_check_kernel('row', kernel_len=kernel_len), device=check_device)
+        self._col_kernel = to_device(_get_check_kernel('col', kernel_len=kernel_len), device=check_device)
+        self._diag_kernel = to_device(_get_check_kernel('diag', kernel_len=kernel_len), device=check_device)
+        self._diag1_kernel = to_device(_get_check_kernel('diag1', kernel_len=kernel_len), device=check_device)
+
+        # Features
+        self._features = self._field2features()
+        self._n_features = self._features.shape[1]
+
+        # Torch running values (to speed up computations):
+        self.device = device
+        self._running_features = self._get_running_features()
+
+    # ################################################## SET SECTION #################################################
+
+    def set_field(self, field):
+        if not isinstance(field, np.ndarray):
+            field = to_np(field)
+        _check_numpy_field(field)
+
+        self._field = np.copy(np.float32(field))
+        self._check_field = self._get_check_field()
+        self._action_id = self._get_action_id()
+        self._features = self._field2features()
+        self._running_features = self._get_running_features()
+
+    # ################################################# MOVE SECTION #################################################
+
+    def make_move(self, i, j, action_id=None):
+        if self._field[i, j] != 0:
+            raise IndexError('Accessing already marked cell.')
+
+        action_id = self._action_id if action_id is None else action_id
+
+        self._field[i, j] = action_id
+        self._check_field[0, 0, i, j] = action_id
+
+        self._features[0, 0, i, j] = 1
+        self._features[0, -1, i, j] = 0
+
+        self._running_features[0, 0, i, j] = 1
+        self._running_features[0, -1, i, j] = 0
+
+        self._update_action_id()
+
+    def retract_move(self, i, j):
+        if self._field[i, j] == 0:
+            raise IndexError('Clearing already empty cell.')
+
+        self._field[i, j] = EMPTY_ID
+        self._check_field[0, 0, i, j] = EMPTY_ID
+
+        self._features[0, 0, i, j] = 0
+        self._features[0, -1, i, j] = 1
+
+        self._running_features[0, 0, i, j] = 0
+        self._running_features[0, -1, i, j] = 1
+
+        self._update_action_id()
+
+    # ######################################### WIN / DRAW / VALUE SECTION ###########################################
+
+    def check_draw(self, is_win_checked=True):
+        is_draw = self._get_depth() == self._n ** 2
+        if is_draw and (not is_win_checked):
+            is_draw = not self.check_win()
+        return is_draw
+
+    def check_win(self, action_id=None, return_how=False):
+        """Returns bool `is_win` or tuple `(is_win, how, where)` if `return_how` is true."""
+        action_id = self._get_opponent_action_id() if action_id is None else action_id
+        t = (self._check_field == action_id).float()
+        k = self.kernel_len
+
+        # Sequential checks-returns and inverse (not return_how) typing to reduce computations:
+
+        by_row = self._row_kernel(t) >= k
+        if torch.any(by_row):
+            return True if (not return_how) else (True, 'row', _get_win_center(by_row, 'row', k))
+
+        by_col = self._col_kernel(t) >= k
+        if torch.any(by_col):
+            return True if (not return_how) else (True, 'col', _get_win_center(by_col, 'col', k))
+
+        by_diag = self._diag_kernel(t) >= k
+        if torch.any(by_diag):
+            return True if (not return_how) else (True, 'diag', _get_win_center(by_diag, 'diag', k))
+
+        by_diag1 = self._diag1_kernel(t) >= k
+        if torch.any(by_diag1):
+            return True if (not return_how) else (True, 'diag1', _get_win_center(by_diag1, 'diag1', k))
+
+        return (False, None, None) if return_how else False
+
+    # ################################################# GET SECTION ##################################################
+
+    def get_value(self):
+        # TODO: probably we need to access a custom `field` given by arg.
+        if self._get_depth() > (self.kernel_len * 2 - 2):  # slightly reduces computations
+            if self.check_win():
+                return WIN_VALUE
+            elif self.check_draw():
+                return DRAW_VALUE
+            else:
+                return None
+
+    def get_field(self):
+        return np.copy(self._field)
+
+    def get_features(self):
+        return np.copy(self._features)
+
+    def get_running_features(self):
+        return self._running_features
+
+    def get_n(self):
+        return self._n
+
+    # ############################################### UTILS SECTION ##################################################
+
+    def _get_depth(self, field=None):
+        field = self._field if field is None else field
+        return np.count_nonzero(field)
+
+    def _get_action_id(self, field=None):
+        field = self._field if field is None else field
+        return X_ID if (self._get_depth(field) % 2 == 0) else O_ID
+
+    def _get_opponent_action_id(self, action_id=None):
+        action_id = self._action_id if action_id is None else action_id
+        return X_ID if action_id == O_ID else O_ID
+
+    def _update_action_id(self):
+        self._action_id = self._get_opponent_action_id()
+        # TODO: could it be done via np/torch functions?
+        self._features = self._features[:, [1, 0, *range(2, self._n_features)], ...]
+        self._running_features = self._running_features[:, [1, 0, *range(2, self._n_features)], ...]
+
+    def _get_check_field(self):
+        return to_var(self._field[None, None], device=self.check_device)
+
+    def _get_running_features(self):
+        return to_var(np.copy(self._features), device=self.device)
+
+    def _field2features(self, field=None):
+        field = self._field if field is None else field
+        action_id = self._get_action_id(field)
+        opponent_action_id = self._get_opponent_action_id(action_id=action_id)
+
+        features = np.float32(np.concatenate((
+            (field == action_id)[None, None],               # is player?      {0, 1}
+            (field == opponent_action_id)[None, None],      # is opponent?    {0, 1}
+            np.zeros_like(field)[None, None],               # zeros plane     {0}
+            np.ones_like(field)[None, None],                # ones plane      {1}
+            (field == 0)[None, None],                       # is legal move?  {0, 1}
+        ), axis=1))
+        return features
 
 
 def _check_numpy_field(field: np.ndarray):
@@ -25,247 +210,26 @@ def _check_numpy_field(field: np.ndarray):
         raise ValueError(f'Working with square fields only; however, shape `{field.shape}` is given.')
 
 
-def get_check_kernel(kernel_len=5, direction='row'):
+def _get_check_kernel(direction, kernel_len=5):
     if direction not in DIRECTIONS:
         raise ValueError(f'`direction` must be one of the {DIRECTIONS}, {direction} given')
 
-    if 'diag' in direction:
+    if 'diag' in direction:  # 'diag' and 'diag1'
+        kernel_size = kernel_len
         kernel_w = torch.tensor(np.array([[np.eye(kernel_len, dtype=np.float32)]]))
-        kernel = nn.Conv2d(1, 1, kernel_len, bias=False)
-        if '1' in direction:
-            kernel.weight = nn.Parameter(kernel_w.flip(dims=(-1,)), requires_grad=False)
-        else:
-            kernel.weight = nn.Parameter(kernel_w, requires_grad=False)
-        kernel.eval()
-        return kernel
-    else:
+        kernel_w = kernel_w.flip(dims=(-1,)) if '1' in direction else kernel_w
+    else:  # 'row' and 'col'
+        kernel_size = (1, kernel_len) if direction == 'row' else (kernel_len, 1)
         kernel_w = torch.tensor([[[[1.] * kernel_len]]])
-        if 'row' in direction:
-            kernel = nn.Conv2d(1, 1, (1, kernel_len), bias=False)
-            kernel.weight = nn.Parameter(kernel_w, requires_grad=False)
-        else:
-            kernel = nn.Conv2d(1, 1, (kernel_len, 1), bias=False)
-            kernel.weight = nn.Parameter(kernel_w.transpose(-2, -1), requires_grad=False)
-        kernel.eval()
-        return kernel
+        kernel_w = kernel_w.transpose(-2, -1) if direction == 'col' else kernel_w
+
+    kernel = nn.Conv2d(1, 1, kernel_size, bias=False)
+    kernel.weight = nn.Parameter(kernel_w, requires_grad=False)
+    kernel.eval()
+    return kernel
 
 
-class Field:
-    def __init__(self, n=10, kernel_len=5, field=None, device='cpu', check_device='cpu'):
-        if field is not None:
-            if not isinstance(field, np.ndarray):
-                field = to_np(field)
-            _check_numpy_field(field)
-            self._field = np.copy(np.float32(field))
-            self._n = self._field.shape[0]
-        else:
-            self._n = n
-            self._field = np.zeros((n, n), dtype='float32')
-
-        self.kernel_len = kernel_len
-        self.next_action_id = 1
-
-        self.device = device
-        self._features = self.field2features()
-        self._running_features = to_var(np.copy(self._features), device=self.device)
-        self.n_features = self._features.shape[1]
-
-        self.check_device = check_device
-        self._check_field = to_var(self._field[None, None], device=check_device)
-        self._row_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='row'), device=check_device)
-        self._col_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='col'), device=check_device)
-        self._diag_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='diag'), device=check_device)
-        self._diag1_kernel = to_device(get_check_kernel(kernel_len=kernel_len, direction='diag1'), device=check_device)
-
-        self.square_size = WINDOW // self._n
-
-    def _update_action_id(self):
-        self.next_action_id = -self.next_action_id
-        self._features = self._features[:, [1, 0, *range(2, self.n_features)], ...]
-        self._running_features = self._running_features[:, [1, 0, *range(2, self.n_features)], ...]
-
-    def field2features(self, field=None):
-        field = self._field if field is None else np.copy(field)
-        next_action_id = 1 if (self.get_depth(field) % 2 == 0) else -1
-        features = np.float32(np.concatenate((
-            (field == next_action_id)[None, None],  # is player?      {0, 1}
-            (field == -next_action_id)[None, None],  # is opponent?    {0, 1}
-            np.zeros_like(field)[None, None],  # zeros plane     {0}
-            np.ones_like(field)[None, None],  # ones plane      {1}
-            (field == 0)[None, None],  # is legal move?  {0, 1}
-        ), axis=1))
-        return features
-
-    def make_move(self, i, j, _id=None):
-        if _id is None:
-            _id = self.next_action_id
-
-        if self._field[i, j] != 0:
-            raise IndexError('Accessing already marked cell.')
-
-        self._field[i, j] = _id
-        self._check_field[0, 0, i, j] = _id
-
-        self._features[0, 0, i, j] = 1
-        self._features[0, -1, i, j] = 0
-
-        self._running_features[0, 0, i, j] = 1
-        self._running_features[0, -1, i, j] = 0
-
-        self._update_action_id()
-
-    def backward_move(self, i, j):
-        if self._field[i, j] == 0:
-            raise IndexError('Clearing already empty cell.')
-
-        self._field[i, j] = 0
-        self._check_field[0, 0, i, j] = 0
-
-        self._features[0, 0, i, j] = 0
-        self._features[0, -1, i, j] = 1
-
-        self._running_features[0, 0, i, j] = 0
-        self._running_features[0, -1, i, j] = 1
-
-        self._update_action_id()
-
-    def check_draw(self):
-        return not np.any(self._field == 0)
-
-    def check_win(self, _id=None, return_how=False):
-        t = (self._check_field == ((-self.next_action_id) if _id is None else _id)).float()
-        k = self.kernel_len
-
-        is_win, by, at = False, None, None
-
-        by_row = self._row_kernel(t) >= k
-        by_col = self._col_kernel(t) >= k
-        by_diag = self._diag_kernel(t) >= k
-        by_diag1 = self._diag1_kernel(t) >= k
-
-        if torch.any(by_row):
-            center = to_np(torch.nonzero(by_row)[0][2:])
-            is_win, by, at = True, 'row', center + np.array([0, self.kernel_len // 2])
-        if torch.any(by_col):
-            center = to_np(torch.nonzero(by_col)[0][2:])
-            is_win, by, at = True, 'col', center + np.array([self.kernel_len // 2, 0])
-        if torch.any(by_diag):
-            center = to_np(torch.nonzero(by_diag)[0][2:])
-            is_win, by, at = True, 'diag', center + np.array([self.kernel_len // 2, self.kernel_len // 2])
-        if torch.any(by_diag1):
-            center = to_np(torch.nonzero(by_diag1)[0][2:])
-            is_win, by, at = True, 'diag1', center + np.array([self.kernel_len // 2, self.kernel_len // 2])
-
-        return (is_win, by, at) if return_how else is_win
-
-    def get_value(self, _id=None):
-        depth = self.get_depth()
-        value = None
-        if depth > (self.kernel_len * 2 - 2):  # slightly speedups computation
-            if self.check_win(_id=_id):
-                value = WIN_VALUE
-            elif depth == self._n ** 2:  # self.check_draw():
-                value = DRAW_VALUE
-        return value
-
-    def get_state(self):
-        return np.copy(self._field)
-
-    def get_features(self):
-        return np.copy(self._features)
-
-    def get_running_features(self):
-        return self._running_features
-
-    def get_depth(self, field=None):
-        field = self._field if field is None else field
-        return np.count_nonzero(field)
-
-    def get_size(self):
-        return self._n
-
-    def set_state(self, field):
-        if not isinstance(field, np.ndarray):
-            field = to_np(field)
-        self._field = np.copy(np.float32(field))
-        self._check_field = to_var(np.copy(self._field[None, None]), device=self.check_device)
-        self.next_action_id = 1 if (self.get_depth() % 2 == 0) else -1
-        self._features = self.field2features()
-        self._running_features = to_var(np.copy(self._features), device=self.device)
-
-    def show_field(self, field=None, colorbar=False):
-        if field is None:
-            field = self.get_state()
-        if not isinstance(field, np.ndarray):
-            field = to_np(field)
-
-        plt.imshow(field, cmap='gray')
-        if colorbar:
-            plt.colorbar()
-        plt.show()
-
-    def draw_field(self, screen):
-        for i in range(1, self._n):
-            pygame.draw.line(screen, LINE_COLOR, (0, i * self.square_size), (WINDOW, i * self.square_size), 2)
-            pygame.draw.line(screen, LINE_COLOR, (i * self.square_size, 0), (i * self.square_size, WINDOW), 2)
-
-    def draw_figures(self, screen):
-        circle_radius, circle_width = 200 // self._n, 40 // self._n
-        cross_width, space = 50 // self._n, 10
-
-        for row in range(self._n):
-            for col in range(self._n):
-                if self._field[row][col] == 1:
-                    pygame.draw.line(
-                        screen,
-                        CROSS_COLOR,
-                        (col * self.square_size + space, (row + 1) * self.square_size - space),
-                        ((col + 1) * self.square_size - space, row * self.square_size + space),
-                        cross_width
-                    )
-
-                    pygame.draw.line(
-                        screen,
-                        CROSS_COLOR,
-                        (col * self.square_size + space, row * self.square_size + space),
-                        ((col + 1) * self.square_size - space, (row + 1) * self.square_size - space),
-                        cross_width
-                    )
-                elif self._field[row][col] == -1:
-                    pygame.draw.circle(
-                        screen,
-                        CIRCLE_COLOR,
-                        (int(col * self.square_size + self.square_size // 2),
-                         int(row * self.square_size + self.square_size // 2)),
-                        circle_radius,
-                        circle_width
-                    )
-
-    def draw_winning_line(self, screen, by, at):
-        row, col = at
-
-        offset = self.square_size // 2
-
-        pos_x = col * self.square_size + offset
-        pos_y = row * self.square_size + offset
-
-        if by == 'row':
-            start = (pos_x - (self.kernel_len // 2) * self.square_size, pos_y)
-            stop = (pos_x + (self.kernel_len // 2) * self.square_size, pos_y)
-        elif by == 'col':
-            start = (pos_x, pos_y - (self.kernel_len // 2) * self.square_size)
-            stop = (pos_x, pos_y + (self.kernel_len // 2) * self.square_size)
-        elif by == 'diag':
-            start = (pos_x - (self.kernel_len // 2) * self.square_size,
-                     pos_y - (self.kernel_len // 2) * self.square_size)
-            stop = (pos_x + (self.kernel_len // 2) * self.square_size,
-                    pos_y + (self.kernel_len // 2) * self.square_size)
-        elif by == 'diag1':
-            start = (pos_x + (self.kernel_len // 2) * self.square_size,
-                     pos_y - (self.kernel_len // 2) * self.square_size)
-            stop = (pos_x - (self.kernel_len // 2) * self.square_size,
-                    pos_y + (self.kernel_len // 2) * self.square_size)
-        else:
-            raise IndexError('Unexpected winning position')
-
-        pygame.draw.line(screen, WIN_LINE_COLOR, start, stop, 4)
+def _get_win_center(conv_map, by, k):
+    by2shift = {'row': np.array([0, k // 2]), 'col': np.array([k // 2, 0]),
+                'diag': np.array([k // 2, k // 2]), 'diag1': np.array([k // 2, k // 2])}
+    return to_np(torch.nonzero(conv_map)[0][2:]) + by2shift[by]

@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import torch
+
 from dpipe.torch import to_device, to_var
 
 
@@ -13,7 +14,7 @@ class PolicyPlayer:
         self.device = device
 
         # fields to slightly speedup computation:
-        self.n = self.field.get_size()
+        self.n = self.field.get_n()
 
         self.eval()
 
@@ -21,8 +22,8 @@ class PolicyPlayer:
         self.field.make_move(i, j)
         return self.field.get_value()
 
-    def _backward_action(self, i, j):
-        self.field.backward_move(i, j)
+    def _retract_action(self, i, j):
+        self.field.retract_move(i, j)
         return None
 
     def _calc_move(self, policy, eps):
@@ -54,8 +55,8 @@ class PolicyPlayer:
     def forward(self, x):
         return self.model(x)
 
-    def forward_state(self, state=None, tta=False):
-        state = self.field.get_running_features() if state is None else self.field.field2features(field=state)
+    def forward_state(self, tta=False):
+        state = self.field.get_running_features()
 
         if tta:
             augm_state = []
@@ -112,4 +113,4 @@ class PolicyPlayer:
         return policy_manual, proba_manual, action, None, value
 
     def update_field(self, field):
-        self.field.set_state(field=field)
+        self.field.set_field(field)

@@ -44,7 +44,8 @@ def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: 
     # model (x) vs opponent (o):
     # opponent (x) vs model (o):
     if duel_path is not None:
-        player_opponent = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
+        player_opponent = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps,
+                                       device=device)
         wait_and_load_model_state(module=player_opponent.model, exp_path=duel_path, ep=ep)
 
         scores = np.array([play_duel(player_x=player_model_0, player_o=player_opponent, return_result_only=True)

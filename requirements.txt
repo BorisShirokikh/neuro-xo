@@ -4,3 +4,4 @@ pandas
 deep-pipe
 lazycon
 pygame
+matplotlib

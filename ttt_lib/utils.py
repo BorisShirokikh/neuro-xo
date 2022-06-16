@@ -18,7 +18,7 @@ def make_state_hashable(state):
 
 
 def field2hashable(field):
-    return make_state_hashable(field.get_state())
+    return make_state_hashable(field.get_field())
 
 
 def sort_and_clear_running_mean_hash_table(ht, key_n='n', hashes_to_leave=1000):

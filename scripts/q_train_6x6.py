@@ -8,7 +8,7 @@ from dpipe.io import choose_existing
 from dpipe.torch import save_model_state, load_model_state
 
 from ttt_lib.torch.module.policy_net import PolicyNetworkQ6
-from ttt_lib.q_learning import PolicyPlayer, train_q_learning
+from ttt_lib.train_algorithms.q_learning import PolicyPlayer, train_q_learning
 from ttt_lib.field import Field
 
 
