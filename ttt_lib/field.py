@@ -113,7 +113,7 @@ class Field:
 
     def check_win(self, action_id=None, return_how=False):
         """Returns bool `is_win` or tuple `(is_win, how, where)` if `return_how` is true."""
-        action_id = self._get_opponent_action_id() if action_id is None else action_id
+        action_id = self.get_opponent_action_id() if action_id is None else action_id
         t = (self._check_field == action_id).float()
         k = self.kernel_len
 
@@ -161,6 +161,13 @@ class Field:
     def get_n(self):
         return self._n
 
+    def get_action_id(self):
+        return self._action_id
+
+    def get_opponent_action_id(self, action_id=None):
+        action_id = self._action_id if action_id is None else action_id
+        return X_ID if action_id == O_ID else O_ID
+
     # ############################################### UTILS SECTION ##################################################
 
     def _get_depth(self, field=None):
@@ -171,12 +178,8 @@ class Field:
         field = self._field if field is None else field
         return X_ID if (self._get_depth(field) % 2 == 0) else O_ID
 
-    def _get_opponent_action_id(self, action_id=None):
-        action_id = self._action_id if action_id is None else action_id
-        return X_ID if action_id == O_ID else O_ID
-
     def _update_action_id(self):
-        self._action_id = self._get_opponent_action_id()
+        self._action_id = self.get_opponent_action_id()
         # TODO: could it be done via np/torch functions?
         self._features = self._features[:, [1, 0, *range(2, self._n_features)], ...]
         self._running_features = self._running_features[:, [1, 0, *range(2, self._n_features)], ...]
@@ -190,7 +193,7 @@ class Field:
     def _field2features(self, field=None):
         field = self._field if field is None else field
         action_id = self._get_action_id(field)
-        opponent_action_id = self._get_opponent_action_id(action_id=action_id)
+        opponent_action_id = self.get_opponent_action_id(action_id=action_id)
 
         features = np.float32(np.concatenate((
             (field == action_id)[None, None],               # is player?      {0, 1}

@@ -80,7 +80,7 @@ if __name__ == '__main__':
     # TRAIN:
     method = args.method
     if method == 'q_learning':
-        train_q_learning(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q, lam=lam,
+        train_q_learning(player, logger, exp_path, n_episodes, augm=True, n_step_q=n_step_q,
                          ep2eps=ep2eps, lr=lr,
                          episodes_per_epoch=10000, n_duels=100, episodes_per_model_save=10000,
                          duel_path=duel_path)

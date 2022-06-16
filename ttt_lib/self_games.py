@@ -1,5 +1,6 @@
 import numpy as np
 
+from ttt_lib.field import X_ID
 from ttt_lib.im.augm import augm_spatial
 from ttt_lib.monte_carlo_tree_search import run_search, mcts_action
 
@@ -52,7 +53,7 @@ def play_duel(player_x, player_o, field=None, same_field_module=True, return_res
     if not same_field_module:
         player_o.update_field(field=field)
 
-    is_x_next = player_x.field.next_action_id == 1
+    is_x_next = player_x.field.get_action_id() == X_ID
 
     player_act = player_x if is_x_next else player_o
     player_wait = player_o if is_x_next else player_x
@@ -103,6 +104,6 @@ def play_duel(player_x, player_o, field=None, same_field_module=True, return_res
     if v == 0:
         winner = 0
     else:  # v == 1:
-        winner = - player_act.field.next_action_id
+        winner = player_act.field.get_opponent_action_id()
 
     return winner if return_result_only else (s_history, f_history, a_history, q_history, p_history, e_history, winner)
