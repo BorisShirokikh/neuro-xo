@@ -77,11 +77,11 @@ if __name__ == '__main__':
 
                     board.field = player.field.get_field()
 
-                    board.color_cell(screen, *move)
+                    board.color_prev(screen, *move)
 
                     if prev_move:
                         original_color = board.field_colors[(prev_move[0] % 2 + prev_move[1] % 2) % 2]
-                        board.color_cell(screen, *prev_move, color=original_color)
+                        board.color_prev(screen, *prev_move, color=original_color)
 
                     prev_move = move
                     cur_player *= -1
@@ -100,11 +100,11 @@ if __name__ == '__main__':
 
                         board.field = player.field.get_field()
 
-                        board.color_cell(screen, *move)
+                        board.color_prev(screen, *move)
 
                         if prev_move:
                             original_color = board.field_colors[(prev_move[0] % 2 + prev_move[1] % 2) % 2]
-                            board.color_cell(screen, *prev_move, color=original_color)
+                            board.color_prev(screen, *prev_move, color=original_color)
 
                         prev_move = move
                         cur_player *= -1
@@ -113,6 +113,9 @@ if __name__ == '__main__':
 
             is_win, by, at = field.check_win(return_how=True)
             is_draw = field.check_draw()
+
+            if is_win:
+                board.color_win(screen, by, at, kernel_len)
 
             if is_win or is_draw:
                 game_over = True

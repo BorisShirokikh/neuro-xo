@@ -108,7 +108,7 @@ class Board:
         self._color_field(screen, self.field_colors[0], self.field_colors[1])
         pygame.display.update()
 
-    def color_cell(self, screen, row: int, col: int, color: tuple = (186, 202, 69)):
+    def color_prev(self, screen, row: int, col: int, color: tuple = (186, 202, 69)):
         start = (self.frame_thickness + col * self.cell_size, self.frame_thickness + row * self.cell_size)
         stop = (self.cell_size,) * 2
 
@@ -117,3 +117,29 @@ class Board:
             color=color,
             rect=pygame.Rect(*start, *stop)
         )
+
+    def color_win(self, screen, by: str, at: tuple, kernel_len: int, color: tuple = (232, 56, 58)):
+        at_row, at_col = at
+        lbound, rbound = lambda c: c - kernel_len // 2, lambda c: c + kernel_len // 2 + 1
+
+        at_cells = []
+        if by == 'row':
+            at_cells = [(at_row, col) for col in range(lbound(at_col), rbound(at_col))]
+        elif by == 'col':
+            at_cells = [(row, at_col) for row in range(lbound(at_row), rbound(at_row))]
+        elif by == 'diag':
+            at_cells = [(row, col) for row, col in zip(range(lbound(at_row), rbound(at_row)),
+                                                       range(lbound(at_col), rbound(at_col)))]
+        elif by == 'diag1':
+            at_cells = [(row, col) for row, col in zip(range(lbound(at_row), rbound(at_row)),
+                                                       range(rbound(at_col) - 1, lbound(at_col) - 1, -1))]
+
+        for row, col in at_cells:
+            start = (self.frame_thickness + col * self.cell_size, self.frame_thickness + row * self.cell_size)
+            stop = (self.cell_size,) * 2
+
+            pygame.draw.rect(
+                surface=screen,
+                color=color,
+                rect=pygame.Rect(*start, *stop)
+            )
