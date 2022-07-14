@@ -1,7 +1,10 @@
 import os
 from collections import defaultdict
+from pathlib import Path
 
 import numpy as np
+
+import ttt_lib
 
 
 def get_hash_table():
@@ -50,3 +53,7 @@ def get_random_field(n=10, min_depth=0, max_depth=10):
     field.ravel()[xs] = 1
     field.ravel()[os] = -1
     return field
+
+
+def get_repo_root():
+    return Path(ttt_lib.__file__).parent.parent

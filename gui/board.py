@@ -1,6 +1,7 @@
+import numpy as np
 import pygame
 
-import numpy as np
+from ttt_lib.utils import get_repo_root
 
 
 class Board:
@@ -23,8 +24,8 @@ class Board:
         self._color_field(screen, self.field_colors[0], self.field_colors[1])
         self._draw_frame(screen)
 
-        self.cross = pygame.image.load('../assets/cross_h.png')
-        self.circle = pygame.image.load('../assets/circle_h.png')
+        self.cross = pygame.image.load(get_repo_root() / 'assets/cross_h.png')
+        self.circle = pygame.image.load(get_repo_root() / 'assets/circle_h.png')
 
         self.prev_move = None
 

@@ -1,12 +1,9 @@
 import argparse
-
 import sys
 import time
-from pathlib import Path
-
-import pygame
 
 import numpy as np
+import pygame
 from dpipe.torch import load_model_state
 
 from gui.board import Board
@@ -14,6 +11,7 @@ from ttt_lib.field import Field
 from ttt_lib.monte_carlo_tree_search import mcts_action, run_search
 from ttt_lib.policy_player import PolicyPlayer
 from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light
+from ttt_lib.utils import get_repo_root
 
 
 def terminate():
@@ -38,7 +36,7 @@ if __name__ == '__main__':
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
     model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
-    model_path = Path(__file__).absolute().parent / 'agents' / 'q_10x10' / 'model_5.pth'
+    model_path = get_repo_root() / 'agents' / 'q_10x10' / 'model_5.pth'
     load_model_state(model, model_path)
 
     eps = 0
