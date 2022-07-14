@@ -1,7 +1,7 @@
-numpy
-tqdm
-pandas
 deep-pipe
 lazycon
-pygame
 matplotlib
+numpy
+pandas
+pygame~=2.1.2
+tqdm
