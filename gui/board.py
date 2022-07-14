@@ -102,6 +102,12 @@ class Board:
                 obj = pygame.transform.scale(obj, (self.cell_size * (1 - offset),) * 2)
                 screen.blit(obj, start)
 
+        pygame.display.update()
+
+    def clear_board(self, screen):
+        self._color_field(screen, self.field_colors[0], self.field_colors[1])
+        pygame.display.update()
+
     def color_cell(self, screen, row: int, col: int, color: tuple = (186, 202, 69)):
         start = (self.frame_thickness + col * self.cell_size, self.frame_thickness + row * self.cell_size)
         stop = (self.cell_size,) * 2

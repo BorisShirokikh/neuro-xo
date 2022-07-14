@@ -5,6 +5,8 @@ import time
 import numpy as np
 import pygame
 from dpipe.torch import load_model_state
+from pygame import SYSTEM_CURSOR_ARROW, SYSTEM_CURSOR_WAIT
+from pygame.cursors import Cursor
 
 from gui.board import Board
 from ttt_lib.field import Field
@@ -48,13 +50,14 @@ if __name__ == '__main__':
 
     # ###
 
-    last_move = None
-    cur_player = player_1
+    prev_move = None
+    cur_player = 1
 
     field_size, frame_thickness = 50 * n, 10
 
     screen = pygame.display.set_mode((field_size + 2 * frame_thickness,) * 2, )
 
+    # TODO: embed Board in Field
     board = Board(screen, n, 50 * n, frame_thickness)
 
     parser = argparse.ArgumentParser()
@@ -62,28 +65,27 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     while True:
-        pygame.display.update()
-
         for event in pygame.event.get():
             if not game_over:
                 if args.mode == 'single' and player.field.get_action_id() == player_2:
+                    pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_WAIT))
                     _, _, a, v, _ = mcts_action(player=player, root=run_search(player=player, search_time=search_time))
+                    pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_ARROW))
 
                     clicked_row, clicked_col = a // n, a % n
                     move = clicked_row, clicked_col
 
-                    board.field[clicked_row, clicked_col] = cur_player
+                    board.field = player.field.get_field()
 
                     board.color_cell(screen, *move)
 
-                    if last_move:
-                        original_color = board.field_colors[(last_move[0] % 2 + last_move[1] % 2) % 2]
-                        board.color_cell(screen, *last_move, color=original_color)
+                    if prev_move:
+                        original_color = board.field_colors[(prev_move[0] % 2 + prev_move[1] % 2) % 2]
+                        board.color_cell(screen, *prev_move, color=original_color)
 
-                    last_move = move
+                    prev_move = move
                     cur_player *= -1
 
-                    # q, p, a, v, e = player.action(train=False)
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     mouseX = event.pos[0]
                     mouseY = event.pos[1]
@@ -96,18 +98,18 @@ if __name__ == '__main__':
                     if board.field[clicked_row, clicked_col] == 0:
                         _, _, a, v, _ = player.manual_action(clicked_row, clicked_col)
 
-                        board.field[clicked_row, clicked_col] = cur_player
+                        board.field = player.field.get_field()
 
                         board.color_cell(screen, *move)
 
-                        if last_move:
-                            original_color = board.field_colors[(last_move[0] % 2 + last_move[1] % 2) % 2]
-                            board.color_cell(screen, *last_move, color=original_color)
+                        if prev_move:
+                            original_color = board.field_colors[(prev_move[0] % 2 + prev_move[1] % 2) % 2]
+                            board.color_cell(screen, *prev_move, color=original_color)
 
-                        last_move = move
+                        prev_move = move
                         cur_player *= -1
 
-                    time.sleep(.2)
+            board.draw_position(screen)
 
             is_win, by, at = field.check_win(return_how=True)
             is_draw = field.check_draw()
@@ -115,7 +117,16 @@ if __name__ == '__main__':
             if is_win or is_draw:
                 game_over = True
 
-            if (event.type == pygame.KEYDOWN and event.key == pygame.K_q) or (event.type == pygame.QUIT):
+            if event.type == pygame.QUIT:
                 terminate()
 
-        board.draw_position(screen)
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    terminate()
+                elif event.key == pygame.K_r and game_over:
+                    player.update_field(np.zeros((n, n), dtype='float32'))
+                    board.field = player.field.get_field()
+                    board.clear_board(screen)
+
+                    player_1, player_2 = player_2, player_1
+                    game_over = False
