@@ -1,3 +1,5 @@
+import argparse
+
 import sys
 import time
 from pathlib import Path
@@ -12,7 +14,6 @@ from ttt_lib.field import Field
 from ttt_lib.monte_carlo_tree_search import mcts_action, run_search
 from ttt_lib.policy_player import PolicyPlayer
 from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light
-from ttt_lib.utils import choose_model
 
 
 def terminate():
@@ -37,7 +38,7 @@ if __name__ == '__main__':
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
     model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
-    model_path = Path("/home/alex/RL2021_Final_Project/agents/q_10x10") / "model_5.pth"
+    model_path = Path(__file__).absolute().parent / 'agents' / 'q_10x10' / 'model_5.pth'
     load_model_state(model, model_path)
 
     eps = 0
@@ -58,12 +59,16 @@ if __name__ == '__main__':
 
     board = Board(screen, n, 50 * n, frame_thickness)
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m', '--mode', type=str, required=True, choices=['single', 'pvp'])
+    args = parser.parse_args()
+
     while True:
         pygame.display.update()
 
         for event in pygame.event.get():
             if not game_over:
-                if player.field.get_action_id() == player_1:
+                if args.mode == 'single' and player.field.get_action_id() == player_2:
                     _, _, a, v, _ = mcts_action(player=player, root=run_search(player=player, search_time=search_time))
 
                     clicked_row, clicked_col = a // n, a % n
