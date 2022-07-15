@@ -59,6 +59,8 @@ class Field:
     # ################################################## SET SECTION #################################################
 
     def set_field(self, field):
+        if field is None:
+            self._field = np.zeros((self._n, self._n), dtype='float32')
         if not isinstance(field, np.ndarray):
             field = to_np(field)
         _check_numpy_field(field)

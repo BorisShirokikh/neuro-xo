@@ -1,9 +1,7 @@
-import random
-
 import numpy as np
 import torch
 
-from dpipe.torch import to_device, to_var
+from dpipe.torch import to_device, to_var, to_np
 
 
 class PolicyPlayer:
@@ -27,24 +25,41 @@ class PolicyPlayer:
         return None
 
     def _calc_move(self, policy, eps):
-        avail_actions = torch.nonzero(self.field.get_running_features()[:, -1, ...].reshape(-1)).reshape(-1)
-        n_actions = len(avail_actions)
+        """
+        eps = None  : proba choice
+        eps = 0     : greedy choice
+        eps > 0     : eps-greedy choice
+        """
+        avail_a = torch.nonzero(self.field.get_running_features()[:, -1, ...].reshape(-1)).reshape(-1)
+        n_a = len(avail_a)
 
-        avail_p = policy.reshape(-1)[avail_actions]
-        argmax_avail_action_idx = random.choice(
-            torch.nonzero(torch.where(avail_p == avail_p.max(), 1., 0.))).item()
+        avail_p = policy.reshape(-1)[avail_a]
+
+        # greedy choice:
+        a_idx = torch.argmax(avail_p).item()
         exploit = True
 
-        if eps > 0:
-            soft_p = np.zeros(n_actions) + eps / n_actions
-            soft_p[argmax_avail_action_idx] += (1 - eps)
-            soft_p_action_idx = np.random.choice(np.arange(n_actions), p=soft_p)
-            exploit = (soft_p_action_idx == argmax_avail_action_idx)
-            argmax_avail_action_idx = soft_p_action_idx
+        if eps is None:  # proba choice:
+            _a_idx = np.random.choice(np.arange(n_a), p=to_np(avail_p))
+            exploit = (_a_idx == a_idx)
+            a_idx = _a_idx
+        else:
+            if eps > 0:  # eps-greedy
+                soft_p = np.zeros(n_a) + eps / n_a
+                soft_p[a_idx] += (1 - eps)
+                _a_idx = np.random.choice(np.arange(n_a), p=soft_p)
 
-        action = avail_actions[argmax_avail_action_idx].item()
+                exploit = (_a_idx == a_idx)
+                a_idx = _a_idx
 
-        return action, action // self.n, action % self.n, exploit
+        a = avail_a[a_idx].item()
+        return a, exploit
+
+    def a2ij(self, a):
+        return a // self.n, a % self.n
+
+    def ij2a(self, i, j):
+        return i * self.n + j
 
     def eval(self):
         self.model.eval()
@@ -55,54 +70,39 @@ class PolicyPlayer:
     def forward(self, x):
         return self.model(x)
 
-    def forward_state(self, tta=False):
+    def forward_state(self):
         state = self.field.get_running_features()
-
-        if tta:
-            augm_state = []
-            for k in (0, 1, 2, 3):
-                sr = state.rot90(k, (-2, -1))
-                srf = sr.flip(-1)
-                augm_state.append(sr)
-                augm_state.append(srf)
-            policy = self.forward(torch.cat(augm_state, dim=0))
-
-            de_augm_policy = []
-            for k in (0, 1, 2, 3):
-                de_augm_policy.append(policy[k * 2][None].rot90(k, (-1, -2)))
-                de_augm_policy.append(policy[k * 2 + 1][None].rot90(k, (-1, -2)).flip(-1))
-            policy = torch.mean(torch.cat(de_augm_policy, dim=0), dim=0, keepdim=True)
-        else:
-            policy = self.forward(state)
-
+        policy = self.forward(state)
         proba = self.model.predict_proba(state, policy)
-
         return policy[0][0], proba[0][0]
 
-    def action(self, train=True, tta=False):
-        eps = self.eps if train else 0
+    def action(self, train=True):
+        eps = self.eps
+        policy, proba = self.forward_state()
 
-        policy, proba = self.forward_state(tta=tta)
+        if eps is None:
+            action, exploit = self._calc_move(policy=proba, eps=eps)
+        else:
+            action, exploit = self._calc_move(policy=policy, eps=eps)
 
-        action, i, j, exploit = self._calc_move(policy=policy, eps=eps)
-        value = self._forward_action(i, j)
-
+        value = self._forward_action(*self.a2ij(action))
         return policy, proba, action, exploit, value
 
-    def ucb_action(self, q_est, u, q_est_skip_value=-2, lam=0.5, tta=False):
-        policy, proba = self.forward_state(tta=tta)
+    def ucb_action(self, q_est, u, q_est_skip_value=-2, lam=0.5):
+        """ Action interface for MCTS. """
+        policy, proba = self.forward_state()
 
         mask_est = q_est != q_est_skip_value
         policy[mask_est] = lam * policy[mask_est] + (1 - lam) * q_est[mask_est]
         policy = policy + proba * u
 
-        action, i, j, exploit = self._calc_move(policy=policy, eps=0)
-        value = self._forward_action(i, j)
+        action, exploit = self._calc_move(policy=policy, eps=0)
+        value = self._forward_action(*self.a2ij(action))
         return policy, proba, action, exploit, value
 
     def manual_action(self, i, j):
         # compatibility with `action` output:
-        action = i * self.n + j
+        action = self.ij2a(i, j)
         policy_manual = to_var(np.zeros((self.n, self.n), dtype='float32'), device=self.device)
         policy_manual[i, j] = 1
         proba_manual = to_var(np.zeros((self.n, self.n), dtype='float32'), device=self.device)

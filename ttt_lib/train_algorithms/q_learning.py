@@ -102,7 +102,7 @@ def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: Path
 
         # ### validation: ###
         if (ep > 0) and (ep % episodes_per_epoch == 0):
-            validate(val=ep // episodes_per_epoch, ep=ep, player=player, logger=logger, n=n, n_duels=n_duels,
+            validate(epoch=ep // episodes_per_epoch, ep=ep, player=player, logger=logger, n=n, n_duels=n_duels,
                      duel_path=duel_path)
 
         # ### scheduler(eps): ###

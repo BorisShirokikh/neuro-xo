@@ -1,17 +1,18 @@
 from copy import deepcopy
 
 import numpy as np
+from dpipe.io import PathLike
+from dpipe.torch import load_model_state
 from torch.utils.tensorboard import SummaryWriter
 
 from ttt_lib.field import Field
 from ttt_lib.policy_player import PolicyPlayer
 from ttt_lib.self_games import play_duel
 from ttt_lib.torch.module.policy_net import PolicyNetworkRandom
-from ttt_lib.torch.utils import wait_and_load_model_state
 
 
-def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000,
-             duel_path=None):
+def validate(epoch: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_games: int = 400,
+             opponent_model_path: PathLike = None, return_winrate_vs_opponent: bool = False):
     device = player.device
 
     validation_field = Field(n=n, kernel_len=player.field.kernel_len, device=device, check_device=device)
@@ -24,42 +25,43 @@ def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: 
 
     # model (x) vs random (o):
     scores = np.array([play_duel(player_x=player_model_0, player_o=player_random, return_result_only=True)
-                       for _ in range(n_duels)])
-    logger.add_scalar('val/winrate/model(x) vs random(o)', np.mean(scores == 1), val)
-    logger.add_scalar('val/draw_fraction/model(x) vs random(o)', np.mean(scores == 0), val)
+                       for _ in range(n_games)])
+    logger.add_scalar('val/winrate/model(x) vs random(o)', np.mean(scores == 1), epoch)
+    logger.add_scalar('val/draw_fraction/model(x) vs random(o)', np.mean(scores == 0), epoch)
 
     # random (x) vs model (o):
     scores = np.array([play_duel(player_x=player_random, player_o=player_model_0, return_result_only=True)
-                       for _ in range(n_duels)])
-    logger.add_scalar('val/winrate/model(o) vs random(x)', np.mean(scores == -1), val)
-    logger.add_scalar('val/draw_fraction/model(o) vs random(x)', np.mean(scores == 0), val)
+                       for _ in range(n_games)])
+    logger.add_scalar('val/winrate/model(o) vs random(x)', np.mean(scores == -1), epoch)
+    logger.add_scalar('val/draw_fraction/model(o) vs random(x)', np.mean(scores == 0), epoch)
 
     # model (x) vs model (o):
     scores = np.array([play_duel(player_x=player_model_0, player_o=player_model_1, return_result_only=True)
-                       for _ in range(n_duels)])
-    logger.add_scalar('val/winrate/model(x) vs model(o)', np.mean(scores == 1), val)
-    logger.add_scalar('val/draw_fraction/model(x) vs model(o)', np.mean(scores == 0), val)
-    logger.add_scalar('val/winrate/model(o) vs model(x)', np.mean(scores == -1), val)
+                       for _ in range(n_games)])
+    logger.add_scalar('val/winrate/model(x) vs model(o)', np.mean(scores == 1), epoch)
+    logger.add_scalar('val/draw_fraction/model(x) vs model(o)', np.mean(scores == 0), epoch)
 
     # model (x) vs opponent (o):
     # opponent (x) vs model (o):
-    if duel_path is not None:
+    if opponent_model_path is not None:
         player_opponent = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps,
                                        device=device)
-        wait_and_load_model_state(module=player_opponent.model, exp_path=duel_path, ep=ep)
+        load_model_state(module=player_opponent.model, path=opponent_model_path)
 
-        scores = np.array([play_duel(player_x=player_model_0, player_o=player_opponent, return_result_only=True)
-                           for _ in range(n_duels)])
-        logger.add_scalar('val/winrate/model(x) vs opponent(o)', np.mean(scores == 1), val)
-        logger.add_scalar('val/draw_fraction/model(x) vs opponent(o)', np.mean(scores == 0), val)
-        logger.add_scalar('val/winrate/opponent(o) vs model(x)', np.mean(scores == -1), val)
+        scores = np.concatenate((
+            np.array([play_duel(player_x=player_model_0, player_o=player_opponent, return_result_only=True)
+                      for _ in range(n_games)]),
+            -np.array([play_duel(player_x=player_opponent, player_o=player_model_0, return_result_only=True)
+                       for _ in range(n_games)])
+        ))
 
-        scores = np.array([play_duel(player_x=player_model_0, player_o=player_opponent, return_result_only=True)
-                           for _ in range(n_duels)])
-        logger.add_scalar('val/winrate/opponent(x) vs model(o)', np.mean(scores == 1), val)
-        logger.add_scalar('val/draw_fraction/opponent(x) vs model(o)', np.mean(scores == 0), val)
-        logger.add_scalar('val/winrate/model(o) vs opponent(x)', np.mean(scores == -1), val)
+        logger.add_scalar('val/winrate/model vs opponent', np.mean(scores == 1), epoch)
+        logger.add_scalar('val/draw_fraction/model vs opponent', np.mean(scores == 0), epoch)
 
         del player_opponent
+
+        if return_winrate_vs_opponent:
+            del player_random, player_model_0, player_model_1, validation_field
+            return np.mean(scores == 1)
 
     del player_random, player_model_0, player_model_1, validation_field
