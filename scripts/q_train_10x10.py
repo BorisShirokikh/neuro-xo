@@ -16,7 +16,8 @@ if __name__ == '__main__':
 
     Q_EXP_PATH = choose_existing(
         Path('/nmnt/x4-hdd/experiments/rl/q_10x10/'),
-        Path('/home/boris/Desktop/workspace/experiments/rl/q_10x10/',)
+        Path('/home/boris/Desktop/workspace/experiments/rl/q_10x10/'),
+        Path('/shared/experiments/rl/q_10x10/')
     )
 
     parser = argparse.ArgumentParser()
@@ -25,7 +26,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--exp_name', required=True, type=str)
     parser.add_argument('--n_episodes', required=False, type=int, default=2000000)
-    parser.add_argument('--n_step_q', required=False, type=int, default=4)
+    parser.add_argument('--n_step_q', required=False, type=int, default=6)
     parser.add_argument('--episodes_per_epoch', required=False, type=int, default=10000)
 
     parser.add_argument('--n_val_games', required=False, type=int, default=400)
@@ -33,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_starts', required=False, action='store_true', default=False)
     parser.add_argument('--random_starts_max_depth', required=False, type=int, default=10)
 
-    parser.add_argument('--lr_init', required=False, type=float, default=4e-4)
+    parser.add_argument('--lr_init', required=False, type=float, default=4e-5)
     parser.add_argument('--eps_init', required=False, type=float, default=0.3)
 
     parser.add_argument('--preload_path', required=False, type=str, default=None)
