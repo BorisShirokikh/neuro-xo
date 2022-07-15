@@ -92,5 +92,5 @@ if __name__ == '__main__':
                       n_episodes=n_episodes, n_step_q=args.n_step_q, episodes_per_epoch=episodes_per_epoch,
                       n_val_games=args.n_val_games,
                       random_starts=args.random_starts, random_starts_max_depth=args.random_starts_max_depth,
-                      lr_init=lr_init, epoch2lr=None, epoch2eps=None,
+                      lr_init=lr_init, epoch2lr=epoch2lr, epoch2eps=epoch2eps,
                       best_model_name='model.pth', winrate_th=0.55)
