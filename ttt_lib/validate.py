@@ -27,19 +27,16 @@ def validate(epoch: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_
     scores = np.array([play_duel(player_x=player_model_0, player_o=player_random, return_result_only=True)
                        for _ in range(n_games)])
     logger.add_scalar('val/winrate/model(x) vs random(o)', np.mean(scores == 1), epoch)
-    logger.add_scalar('val/draw_fraction/model(x) vs random(o)', np.mean(scores == 0), epoch)
 
     # random (x) vs model (o):
     scores = np.array([play_duel(player_x=player_random, player_o=player_model_0, return_result_only=True)
                        for _ in range(n_games)])
     logger.add_scalar('val/winrate/model(o) vs random(x)', np.mean(scores == -1), epoch)
-    logger.add_scalar('val/draw_fraction/model(o) vs random(x)', np.mean(scores == 0), epoch)
 
     # model (x) vs model (o):
     scores = np.array([play_duel(player_x=player_model_0, player_o=player_model_1, return_result_only=True)
                        for _ in range(n_games)])
     logger.add_scalar('val/winrate/model(x) vs model(o)', np.mean(scores == 1), epoch)
-    logger.add_scalar('val/draw_fraction/model(x) vs model(o)', np.mean(scores == 0), epoch)
 
     # model (x) vs opponent (o):
     # opponent (x) vs model (o):
@@ -56,7 +53,6 @@ def validate(epoch: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_
         ))
 
         logger.add_scalar('val/winrate/model vs opponent', np.mean(scores == 1), epoch)
-        logger.add_scalar('val/draw_fraction/model vs opponent', np.mean(scores == 0), epoch)
 
         del player_opponent
 

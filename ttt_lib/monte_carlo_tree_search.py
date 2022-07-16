@@ -31,7 +31,7 @@ def calc_classical_ucb(tree, h, n, c=5, n_key='n'):
     return u
 
 
-def play_search_game(player, tree, n, field=None, tta=False):
+def play_search_game(player, tree, n, field=None):
     if field is None:
         field = np.zeros((player.field.get_n(), ) * 2, dtype='float32')
     player.update_field(field=field)
@@ -47,7 +47,7 @@ def play_search_game(player, tree, n, field=None, tta=False):
         h = hash(make_state_hashable(player.field.get_field()))
         q_est, u = calc_alpha_go_ucb(tree=tree, h=h, n=n)
         q_est, u = to_var(q_est, device=player.device), to_var(u, device=player.device)
-        q, p, a, _, v = player.ucb_action(q_est, u, tta=tta)
+        q, p, a, _, v = player.ucb_action(q_est, u)
 
         s_history.append(h)
         p_history.append(p.max().item())

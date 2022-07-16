@@ -17,7 +17,8 @@ if __name__ == '__main__':
     Q_EXP_PATH = choose_existing(
         Path('/nmnt/x4-hdd/experiments/rl/q_10x10/'),
         Path('/home/boris/Desktop/workspace/experiments/rl/q_10x10/'),
-        Path('/shared/experiments/rl/q_10x10/')
+        # Path('/shared/experiments/rl/q_10x10/')
+        Path('/shared/experiments/rl/ttt_10x10/')
     )
 
     parser = argparse.ArgumentParser()
@@ -25,8 +26,9 @@ if __name__ == '__main__':
     parser.add_argument('--device', required=False, type=str, default='cuda', choices=('cuda', 'cpu'))
 
     parser.add_argument('--exp_name', required=True, type=str)
+    parser.add_argument('--method', required=False, type=str, default='TB', choices=('TB', 'REINFORCE'))
     parser.add_argument('--n_episodes', required=False, type=int, default=2000000)
-    parser.add_argument('--n_step_q', required=False, type=int, default=6)
+    parser.add_argument('--n_step_q', required=False, type=int, default=8)
     parser.add_argument('--episodes_per_epoch', required=False, type=int, default=10000)
 
     parser.add_argument('--n_val_games', required=False, type=int, default=400)
@@ -34,8 +36,8 @@ if __name__ == '__main__':
     parser.add_argument('--random_starts', required=False, action='store_true', default=False)
     parser.add_argument('--random_starts_max_depth', required=False, type=int, default=10)
 
-    parser.add_argument('--lr_init', required=False, type=float, default=4e-5)
-    parser.add_argument('--eps_init', required=False, type=float, default=0.3)
+    parser.add_argument('--lr_init', required=False, type=float, default=4e-6)
+    parser.add_argument('--eps_init', required=False, type=float, default=0.2)
 
     parser.add_argument('--preload_path', required=False, type=str, default=None)
     parser.add_argument('--large_model', required=False, action='store_true', default=False)
@@ -88,7 +90,7 @@ if __name__ == '__main__':
     opponent = PolicyPlayer(model=model_opp, field=field, eps=eps_init, device=device)
 
     # TRAIN:
-    train_tree_backup(player=player, opponent=opponent, logger=logger, models_bank_path=exp_path,
+    train_tree_backup(player=player, opponent=opponent, logger=logger, models_bank_path=exp_path, method=args.method,
                       n_episodes=n_episodes, n_step_q=args.n_step_q, episodes_per_epoch=episodes_per_epoch,
                       n_val_games=args.n_val_games,
                       random_starts=args.random_starts, random_starts_max_depth=args.random_starts_max_depth,
