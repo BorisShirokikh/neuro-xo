@@ -85,7 +85,7 @@ if __name__ == '__main__':
         load_model_state(model, args.preload_path)
 
     player = PolicyPlayer(model=model, field=field, eps=eps_init, device=device)
-    opponent = PolicyPlayer(model=model_opp, field=field, eps=None, device=device)
+    opponent = PolicyPlayer(model=model_opp, field=field, eps=eps_init, device=device)
 
     # TRAIN:
     train_tree_backup(player=player, opponent=opponent, logger=logger, models_bank_path=exp_path,

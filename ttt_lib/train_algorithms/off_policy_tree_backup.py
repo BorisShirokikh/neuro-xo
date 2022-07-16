@@ -30,7 +30,7 @@ def train_tree_backup(player: PolicyPlayer, opponent: PolicyPlayer, logger: Summ
 
     n = player.field.get_n()
 
-    optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-5, nesterov=True)
+    optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
 
     # ### train loop: ###
     prev_epoch = -1
@@ -107,6 +107,7 @@ def train_tree_backup(player: PolicyPlayer, opponent: PolicyPlayer, logger: Summ
             # ### schedulers ###
             try:
                 player.eps = epoch2eps[epoch]
+                opponent.eps = epoch2eps[epoch]
             except (KeyError, TypeError):  # (no such epochs in the dict, dict is None)
                 pass
 
