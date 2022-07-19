@@ -3,13 +3,14 @@ from torch.utils.data import Dataset
 
 class DatasetXO(Dataset):
     def __init__(self, ):
-        # nested numpy arrays of size (n, n), each represents the particular position
+        # nested numpy arrays of size (n, n), each is the particular state
         self.s = []
 
-        # nested numpy arrays of size (n * n,) each represents the probability of action in the corresponding position
+        # nested numpy arrays of size (n * n + 1,), each is the probability of an action in the corresponding state;
+        # +1 for the "resign" action
         self.pi = []
 
-        # list of the outcomes from the first player's point of view in the corresponding position
+        # list of the outcomes from the first player's point of view in the corresponding state
         self.z = []
 
     def __getitem__(self, index):

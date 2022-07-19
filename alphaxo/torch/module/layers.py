@@ -27,3 +27,21 @@ class MaskedSoftmax(nn.Softmax):
     def forward(self, input: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         masked_input = torch.exp(input - input.max(dim=1, keepdim=True)[0]) * (mask == 1).float()
         return masked_input / torch.clip(torch.sum(masked_input, dim=1, keepdim=True), 1e-6)
+
+
+class ResBlock2d(nn.Module):
+    def __init__(self, n_channels):
+        super().__init__()
+
+        self.conv_path = nn.Sequential(
+            nn.Conv2d(in_channels=n_channels, out_channels=n_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(n_channels),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=n_channels, out_channels=n_channels, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(n_channels),
+        )
+
+        self.out_path = nn.ReLU()
+
+    def forward(self, x):
+        return self.out_path(x + self.conv_path(x))
