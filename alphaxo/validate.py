@@ -3,11 +3,11 @@ from copy import deepcopy
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 
-from ttt_lib.field import Field
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.self_games import play_duel
-from ttt_lib.torch.module.policy_net import PolicyNetworkRandom
-from ttt_lib.torch.utils import wait_and_load_model_state
+from alphaxo.field import Field
+from alphaxo.policy_player import PolicyPlayer
+from alphaxo.self_games import play_duel
+from alphaxo.torch.module.policy_net import PolicyNetworkRandom
+from alphaxo.torch.utils import wait_and_load_model_state
 
 
 def validate(val: int, ep: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_duels: int = 1000,

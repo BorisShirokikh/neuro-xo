@@ -8,11 +8,11 @@ from dpipe.io import choose_existing
 
 from dpipe.torch import load_model_state
 
-from ttt_lib.field import Field, WINDOW, BG_COLOR
-from ttt_lib.monte_carlo_tree_search import mcts_action, run_search
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light
-from ttt_lib.q_learning import PolicyPlayer
-from ttt_lib.utils import choose_model
+from alphaxo.field import Field, WINDOW, BG_COLOR
+from alphaxo.monte_carlo_tree_search import mcts_action, run_search
+from alphaxo.torch.module.policy_net import PolicyNetworkQ10Light
+from alphaxo.q_learning import PolicyPlayer
+from alphaxo.utils import choose_model
 
 Q_EXP_PATH = choose_existing(
     Path('/nmnt/x4-hdd/experiments/rl/q_10x10/'),

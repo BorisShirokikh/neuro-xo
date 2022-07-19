@@ -1,8 +1,8 @@
 import numpy as np
 
-from ttt_lib.field import X_ID
-from ttt_lib.im.augm import augm_spatial
-from ttt_lib.monte_carlo_tree_search import run_search, mcts_action
+from alphaxo.field import X_ID
+from alphaxo.im.augm import augm_spatial
+from alphaxo.monte_carlo_tree_search import run_search, mcts_action
 
 
 def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts_kwargs):

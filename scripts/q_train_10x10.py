@@ -6,11 +6,11 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import choose_existing
 from dpipe.torch import save_model_state, load_model_state
 
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light, PolicyNetworkQ10
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.train_algorithms.q_learning import train_q_learning
-from ttt_lib.train_algorithms.off_policy_tree_backup import train_tree_backup
-from ttt_lib.field import Field
+from alphaxo.torch.module.policy_net import PolicyNetworkQ10Light, PolicyNetworkQ10
+from alphaxo.policy_player import PolicyPlayer
+from alphaxo.train_algorithms.q_learning import train_q_learning
+from alphaxo.train_algorithms.off_policy_tree_backup import train_tree_backup
+from alphaxo.field import Field
 
 
 if __name__ == '__main__':

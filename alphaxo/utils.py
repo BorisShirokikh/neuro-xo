@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 
-import ttt_lib
+import alphaxo
 
 
 def get_hash_table():
@@ -56,4 +56,4 @@ def get_random_field(n=10, min_depth=0, max_depth=10):
 
 
 def get_repo_root():
-    return Path(ttt_lib.__file__).parent.parent
+    return Path(alphaxo.__file__).parent.parent
