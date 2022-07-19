@@ -9,7 +9,7 @@ class DatasetXO(Dataset):
         # nested numpy arrays of size (n * n,) each represents the probability of action in the corresponding position
         self.pi = []
 
-        # list of the outcome from the first player's point of view in the corresponding position
+        # list of the outcomes from the first player's point of view in the corresponding position
         self.z = []
 
     def __getitem__(self, index):
