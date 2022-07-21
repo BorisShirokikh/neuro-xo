@@ -16,7 +16,6 @@ class NeuroXOZero(pl.LightningModule):
             num_workers: int,
             optimizer: torch.optim.Optimizer,
             scheduler,
-            device: str,
             *,
             board_size=10,
             hid_features=256, n_blocks=19
