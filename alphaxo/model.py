@@ -34,7 +34,7 @@ class AlphaXOZero(pl.LightningModule):
             nn.BatchNorm2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(2 * board_size ** 2, board_size ** 2 + 1),
+            nn.Linear(2 * board_size ** 2, board_size ** 2),
             nn.Softmax(dim=-1)
         )
 
@@ -74,7 +74,7 @@ class AlphaXOZero(pl.LightningModule):
         # FIXME: random training dataset initialization
         for _ in range(100):
             self.train_dataset.s.append(np.random.rand(self.board_size, self.board_size))
-            self.train_dataset.pi.append(np.random.rand(self.board_size ** 2 + 1))
+            self.train_dataset.pi.append(np.random.rand(self.board_size ** 2))
             self.train_dataset.z.append(np.random.randint(2))
 
     def training_step(self, batch, batch_idx):

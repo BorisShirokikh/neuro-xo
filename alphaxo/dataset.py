@@ -6,8 +6,7 @@ class DatasetXO(Dataset):
         # nested numpy arrays of size (n, n), each is the particular state
         self.s = []
 
-        # nested numpy arrays of size (n * n + 1,), each is the probability of an action in the corresponding state;
-        # +1 for the "resign" action
+        # nested numpy arrays of size (n * n,), each is the probability of an action in the corresponding state;
         self.pi = []
 
         # list of the outcomes from the first player's point of view in the corresponding state
