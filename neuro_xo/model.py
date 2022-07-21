@@ -12,10 +12,11 @@ from .torch import ResBlock2d
 class NeuroXOZero(pl.LightningModule):
     def __init__(
             self,
-            batch_size,
-            num_workers,
-            optimizer,
+            batch_size: int,
+            num_workers: int,
+            optimizer: torch.optim.Optimizer,
             scheduler,
+            device: str,
             *,
             board_size=10,
             hid_features=256, n_blocks=19
@@ -61,9 +62,9 @@ class NeuroXOZero(pl.LightningModule):
         self.board_size = board_size
 
     def forward(self, x):
-        x = self.backbone(x)
+        x = self.backbone(x.unsqueeze(1))
 
-        return self.policy_head(x), self.value_head(x)
+        return self.policy_head(x), self.value_head(x).squeeze()
 
     def train_dataloader(self):
         return DataLoader(self.train_dataset, num_workers=self.num_workers, batch_size=self.batch_size, shuffle=True)
@@ -74,14 +75,15 @@ class NeuroXOZero(pl.LightningModule):
     def on_epoch_start(self):
         # FIXME: random training dataset initialization
         for _ in range(100):
-            self.train_dataset.s.append(np.random.rand(self.board_size, self.board_size))
-            self.train_dataset.pi.append(np.random.rand(self.board_size ** 2))
+            self.train_dataset.s.append(np.random.rand(self.board_size, self.board_size).astype(np.float32))
+            self.train_dataset.pi.append(np.random.rand(self.board_size ** 2).astype(np.float32))
             self.train_dataset.z.append(np.random.randint(2))
 
     def training_step(self, batch, batch_idx):
         s, pi, z = batch
+
         p, v = self(s)
 
-        loss = (z - v) ** 2 - torch.dot(pi.T, torch.log(p))
+        loss = (z - v) ** 2 - (pi * torch.log(p)).sum(dim=-1)
 
-        return loss
+        return loss.mean()
