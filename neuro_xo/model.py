@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
@@ -8,7 +9,7 @@ from .dataset import DatasetXO
 from .torch import ResBlock2d
 
 
-class AlphaXOZero(pl.LightningModule):
+class NeuroXOZero(pl.LightningModule):
     def __init__(
             self,
             batch_size,
@@ -81,7 +82,6 @@ class AlphaXOZero(pl.LightningModule):
         s, pi, z = batch
         p, v = self(s)
 
-        # loss = loss(p, v, pi, z)
-        loss = np.nan
+        loss = (z - v) ** 2 - torch.dot(pi.T, torch.log(p))
 
         return loss
