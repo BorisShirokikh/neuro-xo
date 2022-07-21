@@ -9,11 +9,11 @@ from pygame import SYSTEM_CURSOR_ARROW, SYSTEM_CURSOR_WAIT
 from pygame.cursors import Cursor
 
 from gui.board import Board
-from alphaxo.field import Field
-from alphaxo.monte_carlo_tree_search import mcts_action, run_search
-from alphaxo.policy_player import PolicyPlayer
-from alphaxo.torch.module.policy_net import PolicyNetworkQ10Light
-from alphaxo.utils import get_repo_root
+from neuro_xo.field import Field
+from neuro_xo.monte_carlo_tree_search import mcts_action, run_search
+from neuro_xo.policy_player import PolicyPlayer
+from neuro_xo.torch.module.policy_net import PolicyNetworkQ10Light
+from neuro_xo.utils import get_repo_root
 
 
 def terminate():

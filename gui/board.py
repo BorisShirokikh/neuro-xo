@@ -1,7 +1,7 @@
 import numpy as np
 import pygame
 
-from alphaxo.utils import get_repo_root
+from neuro_xo.utils import get_repo_root
 
 
 class Board:

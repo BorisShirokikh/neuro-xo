@@ -9,10 +9,10 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike
 from dpipe.torch import to_var, save_model_state
 
-from alphaxo.self_games import play_self_game
-from alphaxo.validate import validate
-from alphaxo.policy_player import PolicyPlayer
-from alphaxo.torch.model import optimizer_step
+from neuro_xo.self_games import play_self_game
+from neuro_xo.validate import validate
+from neuro_xo.policy_player import PolicyPlayer
+from neuro_xo.torch.model import optimizer_step
 
 
 def train_q_learning(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,

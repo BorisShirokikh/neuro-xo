@@ -6,11 +6,11 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike
 from dpipe.torch import to_var, save_model_state
 
-from alphaxo.policy_player import PolicyPlayer
-from alphaxo.self_games import play_self_game
-from alphaxo.torch.model import optimizer_step
-from alphaxo.utils import get_random_field
-from alphaxo.validate import validate
+from neuro_xo.policy_player import PolicyPlayer
+from neuro_xo.self_games import play_self_game
+from neuro_xo.torch.model import optimizer_step
+from neuro_xo.utils import get_random_field
+from neuro_xo.validate import validate
 
 
 def train_tree_backup(player: PolicyPlayer, logger: SummaryWriter, exp_path: PathLike, n_episodes: int,
