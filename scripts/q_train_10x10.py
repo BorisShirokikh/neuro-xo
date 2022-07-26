@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import choose_existing
 from dpipe.torch import load_model_state
 
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ10Light, PolicyNetworkQ10
+from ttt_lib.torch.module.policy_net import PolicyNetworkQ10
 from ttt_lib.policy_player import PolicyPlayer
 from ttt_lib.train_algorithms.off_policy_tree_backup import train_tree_backup
 from ttt_lib.field import Field
@@ -15,7 +15,6 @@ from ttt_lib.field import Field
 if __name__ == '__main__':
 
     Q_EXP_PATH = choose_existing(
-        Path('/nmnt/x4-hdd/experiments/rl/q_10x10/'),
         Path('/home/boris/Desktop/workspace/experiments/rl/q_10x10/'),
         # Path('/shared/experiments/rl/q_10x10/')
         Path('/shared/experiments/rl/ttt_10x10/')
@@ -36,11 +35,10 @@ if __name__ == '__main__':
     parser.add_argument('--random_starts', required=False, action='store_true', default=False)
     parser.add_argument('--random_starts_max_depth', required=False, type=int, default=10)
 
-    parser.add_argument('--lr_init', required=False, type=float, default=4e-6)
-    parser.add_argument('--eps_init', required=False, type=float, default=0.2)
+    parser.add_argument('--lr_init', required=False, type=float, default=4e-8)
+    parser.add_argument('--eps_init', required=False, type=float, default=0.4)
 
     parser.add_argument('--preload_path', required=False, type=str, default=None)
-    parser.add_argument('--large_model', required=False, action='store_true', default=False)
 
     args = parser.parse_known_args()[0]
 
@@ -64,7 +62,7 @@ if __name__ == '__main__':
     lr_init = args.lr_init
     epoch2lr = {int(i * n_epochs / (n_dec_steps + 1)): lr_init * (0.5 ** i) for i in range(1, n_dec_steps + 1)}
 
-    eps_init = 0.4
+    eps_init = args.eps_init
     epoch2eps = {
         **{int(i * n_epochs / (n_dec_steps + 1)): eps_init * (n_dec_steps - i) / n_dec_steps
            for i in range(1, n_dec_steps)}, int(n_dec_steps * n_epochs / (n_dec_steps + 1)): None
@@ -75,13 +73,9 @@ if __name__ == '__main__':
 
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
-    cnn_features = (128, 64)
-    if args.large_model:
-        model = PolicyNetworkQ10(n=n, structure=cnn_features)
-        model_opp = PolicyNetworkQ10(n=n, structure=cnn_features)
-    else:
-        model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
-        model_opp = PolicyNetworkQ10Light(n=n, structure=cnn_features)
+    cnn_features = (128, 128)
+    model = PolicyNetworkQ10(n=n, structure=cnn_features)
+    model_opp = PolicyNetworkQ10(n=n, structure=cnn_features)
 
     if args.preload_path is not None:
         load_model_state(model, args.preload_path)

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import numpy as np
@@ -66,6 +65,7 @@ def train_tree_backup(player: PolicyPlayer, opponent: PolicyPlayer, logger: Summ
         # ### 3. forward step for all encountered states ###
         player.train()
         rev_f_tensor = to_var(np.concatenate(rev_f_history, axis=0), device=player.device)
+        rev_l_history = player.forward(rev_f_tensor)
         rev_q_history = player.forward(rev_f_tensor)
 
         # ### 4. calculating loss with TB or REINFORCE algorithm ###
@@ -73,7 +73,7 @@ def train_tree_backup(player: PolicyPlayer, opponent: PolicyPlayer, logger: Summ
         loss.to(player.device)
 
         if method == 'TB':
-            rev_q_history = rev_q_history.squeeze(1)
+            rev_q_history = player.predict_action_values(rev_l_history).squeeze(1)
             for t_rev, (a, q) in enumerate(zip(rev_a_history, rev_q_history)):
                 if t_rev < n_step_q:
                     q_star = value
@@ -82,7 +82,7 @@ def train_tree_backup(player: PolicyPlayer, opponent: PolicyPlayer, logger: Summ
                 loss = loss + .5 * (q[a // n, a % n] - q_star) ** 2
 
         else:  # method == 'REINFORCE':
-            rev_p_history = player.model.predict_proba(rev_f_tensor, rev_q_history).squeeze(1)
+            rev_p_history = player.model.predict_proba(rev_f_tensor, rev_l_history).squeeze(1)
             for a, p in zip(rev_a_history, rev_p_history):
                 log = torch.log(p[a // n, a % n])
                 if log.item() == -torch.inf:

@@ -70,10 +70,14 @@ class PolicyPlayer:
     def forward(self, x):
         return self.model(x)
 
+    def predict_action_values(self, logits):
+        return self.model.predict_action_values(logits)
+
     def forward_state(self):
         state = self.field.get_running_features()
-        policy = self.forward(state)
-        proba = self.model.predict_proba(state, policy)
+        logits = self.forward(state)
+        policy = self.predict_action_values(logits)
+        proba = self.model.predict_proba(state, logits)
         return policy[0][0], proba[0][0]
 
     def action(self, train=True):
