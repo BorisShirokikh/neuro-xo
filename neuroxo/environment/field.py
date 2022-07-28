@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+# TODO: move from dpipe to own lib
 from dpipe.torch import to_np, to_device, to_var
 
 
@@ -19,7 +20,7 @@ DRAW_VALUE = 0
 
 class Field:
     def __init__(self, n: int = 10, kernel_len: int = 5, field: Union[np.ndarray, torch.Tensor] = None,
-                 device: str = 'cpu', check_device: str = 'cpu'):
+                 device: str = 'cpu'):
         # Player0 = 'x', it's player_id (action_id) = 1 = X_ID
         # Player1 = '0', it's player_id (action_id) = -1 = O_ID
         # For the empty field (default init) Player0 is the first to move:
@@ -37,72 +38,51 @@ class Field:
             self._n = self._field.shape[0]
             self._action_id = self._get_action_id()
 
-        # Condition to win init
-        self.kernel_len = kernel_len
-
-        # Check win algorithm init
-        self.check_device = check_device
-        self._check_field = self._get_check_field()
-        self._row_kernel = to_device(_get_check_kernel('row', kernel_len=kernel_len), device=check_device)
-        self._col_kernel = to_device(_get_check_kernel('col', kernel_len=kernel_len), device=check_device)
-        self._diag_kernel = to_device(_get_check_kernel('diag', kernel_len=kernel_len), device=check_device)
-        self._diag1_kernel = to_device(_get_check_kernel('diag1', kernel_len=kernel_len), device=check_device)
-
-        # Features
+        self._kernel_len = kernel_len
+        self._device = device
         self._features = self._field2features()
-        self._n_features = self._features.shape[1]
-
-        # Torch running values (to speed up computations):
-        self.device = device
         self._running_features = self._get_running_features()
+        self._check_kernels = {d: to_device(_get_check_kernel(d, kernel_len=kernel_len), device=device)
+                               for d in DIRECTIONS}
+        self._game_history = []
 
     # ################################################## SET SECTION #################################################
 
-    def set_field(self, field):
-        if field is None:
-            self._field = np.zeros((self._n, self._n), dtype='float32')
+    def set_field(self, field, game_history=None):
         if not isinstance(field, np.ndarray):
             field = to_np(field)
         _check_numpy_field(field)
 
         self._field = np.copy(np.float32(field))
-        self._check_field = self._get_check_field()
         self._action_id = self._get_action_id()
         self._features = self._field2features()
         self._running_features = self._get_running_features()
+        self._game_history = [] if game_history is None else game_history
 
     # ################################################# MOVE SECTION #################################################
 
-    def make_move(self, i, j, action_id=None):
-        if self._field[i, j] != 0:
+    def make_move(self, i, j):
+        if self._field[i, j] != EMPTY_ID:
             raise IndexError('Accessing already marked cell.')
 
-        action_id = self._action_id if action_id is None else action_id
+        action_id = self._action_id
 
         self._field[i, j] = action_id
-        self._check_field[0, 0, i, j] = action_id
-
-        self._features[0, 0, i, j] = 1
-        self._features[0, -1, i, j] = 0
-
         self._running_features[0, 0, i, j] = 1
-        self._running_features[0, -1, i, j] = 0
-
+        self._features[0, 0, i, j] = 1
         self._update_action_id()
+        self._game_history.append([i, j])
 
-    def retract_move(self, i, j):
-        if self._field[i, j] == 0:
-            raise IndexError('Clearing already empty cell.')
+    def retract_move(self):
+        if not self._game_history:
+            raise ValueError('Trying to retract move with empty history.')
+
+        i, j = self._game_history[-1]
+        self._game_history = self._game_history[:-1]
 
         self._field[i, j] = EMPTY_ID
-        self._check_field[0, 0, i, j] = EMPTY_ID
-
-        self._features[0, 0, i, j] = 0
-        self._features[0, -1, i, j] = 1
-
-        self._running_features[0, 0, i, j] = 0
-        self._running_features[0, -1, i, j] = 1
-
+        self._running_features[0, 1, i, j] = 0
+        self._features[0, 1, i, j] = 0
         self._update_action_id()
 
     # ######################################### WIN / DRAW / VALUE SECTION ###########################################
@@ -113,37 +93,22 @@ class Field:
             is_draw = not self.check_win()
         return is_draw
 
-    def check_win(self, action_id=None, return_how=False):
+    def check_win(self, return_how=False):
         """Returns bool `is_win` or tuple `(is_win, how, where)` if `return_how` is true."""
-        action_id = self.get_opponent_action_id() if action_id is None else action_id
-        t = (self._check_field == action_id).float()
-        k = self.kernel_len
+        t = self._running_features[:, [1], ...].float()
 
         # Sequential checks-returns and inverse (not return_how) typing to reduce computations:
-
-        by_row = self._row_kernel(t) >= k
-        if torch.any(by_row):
-            return True if (not return_how) else (True, 'row', _get_win_center(by_row, 'row', k))
-
-        by_col = self._col_kernel(t) >= k
-        if torch.any(by_col):
-            return True if (not return_how) else (True, 'col', _get_win_center(by_col, 'col', k))
-
-        by_diag = self._diag_kernel(t) >= k
-        if torch.any(by_diag):
-            return True if (not return_how) else (True, 'diag', _get_win_center(by_diag, 'diag', k))
-
-        by_diag1 = self._diag1_kernel(t) >= k
-        if torch.any(by_diag1):
-            return True if (not return_how) else (True, 'diag1', _get_win_center(by_diag1, 'diag1', k))
+        for d in DIRECTIONS:
+            by_d = self._check_kernels[d](t) >= self._kernel_len
+            if torch.any(by_d):
+                return True if (not return_how) else (True, 'row', _get_win_center(by_d, d, self._kernel_len))
 
         return (False, None, None) if return_how else False
 
     # ################################################# GET SECTION ##################################################
 
     def get_value(self):
-        # TODO: probably we need to access a custom `field` given by arg.
-        if self._get_depth() > (self.kernel_len * 2 - 2):  # slightly reduces computations
+        if self._get_depth() > (self._kernel_len * 2 - 2):  # slightly reduces computations
             if self.check_win():
                 return WIN_VALUE
             elif self.check_draw():
@@ -170,6 +135,9 @@ class Field:
         action_id = self._action_id if action_id is None else action_id
         return X_ID if action_id == O_ID else O_ID
 
+    def get_history(self):
+        return self._game_history[:]
+
     # ############################################### UTILS SECTION ##################################################
 
     def _get_depth(self, field=None):
@@ -182,15 +150,8 @@ class Field:
 
     def _update_action_id(self):
         self._action_id = self.get_opponent_action_id()
-        # TODO: could it be done via np/torch functions?
-        self._features = self._features[:, [1, 0, *range(2, self._n_features)], ...]
-        self._running_features = self._running_features[:, [1, 0, *range(2, self._n_features)], ...]
-
-    def _get_check_field(self):
-        return to_var(self._field[None, None], device=self.check_device)
-
-    def _get_running_features(self):
-        return to_var(np.copy(self._features), device=self.device)
+        self._running_features = torch.flip(self._running_features, dims=(1, ))
+        self._features = np.flip(self._features, axis=1)
 
     def _field2features(self, field=None):
         field = self._field if field is None else field
@@ -200,11 +161,11 @@ class Field:
         features = np.float32(np.concatenate((
             (field == action_id)[None, None],               # is player?      {0, 1}
             (field == opponent_action_id)[None, None],      # is opponent?    {0, 1}
-            np.zeros_like(field)[None, None],               # zeros plane     {0}
-            np.ones_like(field)[None, None],                # ones plane      {1}
-            (field == 0)[None, None],                       # is legal move?  {0, 1}
         ), axis=1))
         return features
+
+    def _get_running_features(self):
+        return to_var(np.copy(self._field2features(field=self._field)), device=self._device)
 
 
 def _check_numpy_field(field: np.ndarray):

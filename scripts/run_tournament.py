@@ -7,11 +7,11 @@ from dpipe.io import choose_existing, save_json, load
 import numpy as np
 from dpipe.torch import load_model_state
 from tqdm.auto import tqdm
-from ttt_lib.self_games import play_duel
+from neuroxo.self_games import play_duel
 
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ10
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.field import Field
+from neuroxo.torch.module.policy_net import PolicyNetworkQ10
+from neuroxo.policy_player import PolicyPlayer
+from neuroxo.environment.field import Field
 
 
 if __name__ == '__main__':

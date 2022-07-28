@@ -20,10 +20,6 @@ class PolicyPlayer:
         self.field.make_move(i, j)
         return self.field.get_value()
 
-    def _retract_action(self, i, j):
-        self.field.retract_move(i, j)
-        return None
-
     def _calc_move(self, policy, eps):
         """
         eps = None  : proba choice
@@ -103,18 +99,6 @@ class PolicyPlayer:
         action, exploit = self._calc_move(policy=policy, eps=0)
         value = self._forward_action(*self.a2ij(action))
         return policy, proba, action, exploit, value
-
-    def manual_action(self, i, j):
-        # compatibility with `action` output:
-        action = self.ij2a(i, j)
-        policy_manual = to_var(np.zeros((self.n, self.n), dtype='float32'), device=self.device)
-        policy_manual[i, j] = 1
-        proba_manual = to_var(np.zeros((self.n, self.n), dtype='float32'), device=self.device)
-        proba_manual[i, j] = 1
-
-        value = self._forward_action(i, j)
-
-        return policy_manual, proba_manual, action, None, value
 
     def update_field(self, field):
         self.field.set_field(field)

@@ -1,8 +1,8 @@
 import numpy as np
 
-from ttt_lib.field import X_ID
-from ttt_lib.im.augm import augm_spatial
-from ttt_lib.monte_carlo_tree_search import run_search, mcts_action
+from neuroxo.environment.field import X_ID
+from neuroxo.im.augm import augm_spatial
+from neuroxo.monte_carlo_tree_search import run_search, mcts_action
 
 
 def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts_kwargs):
@@ -84,6 +84,8 @@ def play_duel(player_x, player_o, field=None, same_field_module=True, return_res
                                         root=run_search(player=player_act, search_time=search_time_act))
         else:
             q, p, a, e, v = player_act.action(train=True)
+            field.make_move(a)
+            v = field.get_reward()
 
         if not same_field_module:
             player_wait.update_field(player_wait.field.get_field())

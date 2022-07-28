@@ -5,9 +5,9 @@ from copy import deepcopy
 import numpy as np
 from dpipe.torch import to_var
 
-from ttt_lib.field import Field
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.utils import make_state_hashable, get_hash_table
+from neuroxo.environment.field import Field
+from neuroxo.policy_player import PolicyPlayer
+from neuroxo.utils import make_state_hashable, get_hash_table
 
 
 def calc_alpha_go_ucb(tree, h, n, c=5, n_key='n', sum_key='sum', q_est_skip_value=-2):

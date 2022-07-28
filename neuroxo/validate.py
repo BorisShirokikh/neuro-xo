@@ -5,10 +5,10 @@ from dpipe.io import PathLike
 from dpipe.torch import load_model_state
 from torch.utils.tensorboard import SummaryWriter
 
-from ttt_lib.field import Field
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.self_games import play_duel
-from ttt_lib.torch.module.policy_net import PolicyNetworkRandom
+from neuroxo.environment.field import Field
+from neuroxo.policy_player import PolicyPlayer
+from neuroxo.self_games import play_duel
+from neuroxo.torch.module.policy_net import PolicyNetworkRandom
 
 
 def validate(epoch: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_games: int = 400,

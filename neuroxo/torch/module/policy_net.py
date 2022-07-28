@@ -3,7 +3,7 @@ import torch.nn as nn
 from dpipe.layers import ResBlock2d
 from dpipe.torch import to_device
 
-from ttt_lib.torch.module.layers import Bias, MaskedSoftmax
+from neuroxo.torch.module.layers import Bias, MaskedSoftmax
 
 
 class PolicyNetworkQ10(nn.Module):

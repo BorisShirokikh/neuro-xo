@@ -6,10 +6,10 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import choose_existing
 from dpipe.torch import load_model_state
 
-from ttt_lib.torch.module.policy_net import PolicyNetworkQ10
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.train_algorithms.off_policy_tree_backup import train_tree_backup
-from ttt_lib.field import Field
+from neuroxo.torch.module.policy_net import PolicyNetworkQ10
+from neuroxo.policy_player import PolicyPlayer
+from neuroxo.train_algorithms.off_policy_tree_backup import train_tree_backup
+from neuroxo.environment.field import Field
 
 
 if __name__ == '__main__':

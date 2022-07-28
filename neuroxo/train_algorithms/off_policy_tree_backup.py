@@ -8,12 +8,12 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike
 from dpipe.torch import to_var, save_model_state, load_model_state
 
-from ttt_lib.field import X_ID
-from ttt_lib.policy_player import PolicyPlayer
-from ttt_lib.self_games import play_duel
-from ttt_lib.torch.model import optimizer_step
-from ttt_lib.utils import get_random_field
-from ttt_lib.validate import validate
+from neuroxo.environment.field import X_ID
+from neuroxo.policy_player import PolicyPlayer
+from neuroxo.self_games import play_duel
+from neuroxo.torch.model import optimizer_step
+from neuroxo.utils import get_random_field
+from neuroxo.validate import validate
 
 
 def train_tree_backup(player: PolicyPlayer, opponent: PolicyPlayer, logger: SummaryWriter, models_bank_path: PathLike,
