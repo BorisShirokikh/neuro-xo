@@ -1,9 +1,12 @@
+import torch
 import torch.nn as nn
 from dpipe.layers import ResBlock2d
 
+from neuroxo.torch.module.layers import MaskedSoftmax
+
 
 class NeuroXOZeroNN(nn.Module):
-    def __init__(self, n: int = 10, in_channels: int = 1, n_blocks=19, n_features=256):
+    def __init__(self, n: int = 10, in_channels: int = 2, n_blocks=19, n_features=256):
         super().__init__()
         self.n = n
         self.in_channels = in_channels
@@ -11,7 +14,7 @@ class NeuroXOZeroNN(nn.Module):
         self.n_features = n_features
 
         self.backbone = nn.Sequential(
-            nn.Conv2d(1, n_features, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, n_features, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(n_features, n_features),
             nn.ReLU(),
 
@@ -24,8 +27,9 @@ class NeuroXOZeroNN(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(2 * n ** 2, n ** 2),
-            nn.Softmax(dim=-1)
         )
+        self.flatten = nn.Flatten()
+        self.masked_softmax = MaskedSoftmax(dim=1)
 
         self.value_head = nn.Sequential(
             nn.Conv2d(n_features, 1, kernel_size=1, stride=1),
@@ -39,6 +43,6 @@ class NeuroXOZeroNN(nn.Module):
         )
 
     def forward(self, x):
-        x = self.backbone(x.unsqueeze(1))
-
-        return self.policy_head(x), self.value_head(x).squeeze()
+        logits = self.backbone(x)
+        proba = self.masked_softmax(self.flatten(logits), self.flatten(torch.sum(x[:, :2, ...], dim=1).unsqueeze(1)))
+        return torch.reshape(proba, shape=(-1, 1, self.n, self.n)), self.value_head(logits).squeeze()

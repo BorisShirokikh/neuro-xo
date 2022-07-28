@@ -29,7 +29,7 @@ class ProbaPolicyNN(nn.Module):
         logits = self.model(x)
         policy = self.tanh(logits)
         proba = self.masked_softmax(self.flatten(logits), self.flatten(torch.sum(x[:, :2, ...], dim=1).unsqueeze(1)))
-        return proba, policy
+        return torch.reshape(proba, shape=(-1, 1, self.n, self.n)), policy
 
 
 class RandomProbaPolicyNN(nn.Module):
