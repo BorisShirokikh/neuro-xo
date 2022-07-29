@@ -6,21 +6,21 @@ from dpipe.torch import load_model_state
 from torch.utils.tensorboard import SummaryWriter
 
 from neuroxo.environment.field import Field
-from neuroxo.policy_player import PolicyPlayer
+from neuroxo.players import PolicyPlayer
 from neuroxo.self_games import play_duel
-from neuroxo.torch.module.policy_net import PolicyNetworkRandom
+from neuroxo.torch.module.policy_net import RandomProbaPolicyNN
 
 
 def validate(epoch: int, player: PolicyPlayer, logger: SummaryWriter, n: int, n_games: int = 400,
              opponent_model_path: PathLike = None, return_winrate_vs_opponent: bool = False):
     device = player.device
 
-    validation_field = Field(n=n, kernel_len=player.field.kernel_len, device=device, check_device=device)
+    validation_field = Field(n=n, kernel_len=player.field.kernel_len, device=device)
 
     player_model_0 = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
     player_model_1 = PolicyPlayer(model=deepcopy(player.model), field=validation_field, eps=player.eps, device=device)
 
-    player_random = PolicyPlayer(model=PolicyNetworkRandom(n=n, in_channels=player.model.in_channels),
+    player_random = PolicyPlayer(model=RandomProbaPolicyNN(n=n, in_channels=player.model.in_channels),
                                  field=validation_field, eps=1., device=device)
 
     # model (x) vs random (o):

@@ -22,7 +22,7 @@ class Field:
     def __init__(self, n: int = 10, kernel_len: int = 5, field: Union[np.ndarray, torch.Tensor] = None,
                  device: str = 'cpu'):
         # Player0 = 'x', it's player_id (action_id) = 1 = X_ID
-        # Player1 = '0', it's player_id (action_id) = -1 = O_ID
+        # Player1 = 'o', it's player_id (action_id) = -1 = O_ID
         # For the empty field (default init) Player0 is the first to move:
         self._action_id = X_ID
 
@@ -33,7 +33,6 @@ class Field:
         else:  # Init field from passed array (np or torch)
             if not isinstance(field, np.ndarray):
                 field = to_np(field)
-            _check_numpy_field(field)
             self._field = np.copy(np.float32(field))
             self._n = self._field.shape[0]
             self._action_id = self._get_action_id()
@@ -51,7 +50,6 @@ class Field:
     def set_field(self, field, game_history=None):
         if not isinstance(field, np.ndarray):
             field = to_np(field)
-        _check_numpy_field(field)
 
         self._field = np.copy(np.float32(field))
         self._action_id = self._get_action_id()
@@ -88,7 +86,7 @@ class Field:
     # ######################################### WIN / DRAW / VALUE SECTION ###########################################
 
     def check_draw(self, is_win_checked=True):
-        is_draw = self._get_depth() == self._n ** 2
+        is_draw = self.get_depth() == self._n ** 2
         if is_draw and (not is_win_checked):
             is_draw = not self.check_win()
         return is_draw
@@ -107,8 +105,12 @@ class Field:
 
     # ################################################# GET SECTION ##################################################
 
+    def get_depth(self, field=None):
+        field = self._field if field is None else field
+        return np.count_nonzero(field)
+
     def get_value(self):
-        if self._get_depth() > (self._kernel_len * 2 - 2):  # slightly reduces computations
+        if self.get_depth() > (self._kernel_len * 2 - 2):  # slightly reduces computations
             if self.check_win():
                 return WIN_VALUE
             elif self.check_draw():
@@ -138,15 +140,17 @@ class Field:
     def get_history(self):
         return self._game_history[:]
 
+    def get_n_features(self):
+        return self._features.shape[1]
+
     # ############################################### UTILS SECTION ##################################################
 
-    def _get_depth(self, field=None):
-        field = self._field if field is None else field
-        return np.count_nonzero(field)
+    def get_kernel_len(self):
+        return self._kernel_len
 
     def _get_action_id(self, field=None):
         field = self._field if field is None else field
-        return X_ID if (self._get_depth(field) % 2 == 0) else O_ID
+        return X_ID if (self.get_depth(field) % 2 == 0) else O_ID
 
     def _update_action_id(self):
         self._action_id = self.get_opponent_action_id()
@@ -166,14 +170,6 @@ class Field:
 
     def _get_running_features(self):
         return to_var(np.copy(self._field2features(field=self._field)), device=self._device)
-
-
-def _check_numpy_field(field: np.ndarray):
-    if len(field.shape) != 2:
-        raise ValueError(f'Field could be initialized only with 2-dim arrays; '
-                         f'however, {len(field.shape)}-dim array is given')
-    if field.shape[0] != field.shape[1]:
-        raise ValueError(f'Working with square fields only; however, shape `{field.shape}` is given.')
 
 
 def _get_check_kernel(direction, kernel_len=5):

@@ -9,8 +9,8 @@ from dpipe.torch import load_model_state
 from tqdm.auto import tqdm
 from neuroxo.self_games import play_duel
 
-from neuroxo.torch.module.policy_net import PolicyNetworkQ10
-from neuroxo.policy_player import PolicyPlayer
+from neuroxo.torch.module.policy_net import ProbaPolicyNN
+from neuroxo.players import PolicyPlayer
 from neuroxo.environment.field import Field
 
 
@@ -43,10 +43,10 @@ if __name__ == '__main__':
 
         field = Field(n=10, kernel_len=5, field=None, device=args.device, check_device=args.device)
 
-        model_x = PolicyNetworkQ10(n=10, structure=(128, 128))
+        model_x = ProbaPolicyNN(n=10, structure=(128, 128))
         load_model_state(model_x, EXP_PATH / pair.split('|')[0])
 
-        model_o = PolicyNetworkQ10(n=10, structure=(128, 128))
+        model_o = ProbaPolicyNN(n=10, structure=(128, 128))
         load_model_state(model_o, EXP_PATH / pair.split('|')[1])
 
         player_x = PolicyPlayer(model=model_x, field=field, eps=None, device=args.device)

@@ -6,8 +6,8 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import choose_existing
 from dpipe.torch import load_model_state
 
-from neuroxo.torch.module.policy_net import PolicyNetworkQ10
-from neuroxo.policy_player import PolicyPlayer
+from neuroxo.torch.module.policy_net import ProbaPolicyNN
+from neuroxo.players import PolicyPlayer
 from neuroxo.train_algorithms.off_policy_tree_backup import train_tree_backup
 from neuroxo.environment.field import Field
 
@@ -74,8 +74,8 @@ if __name__ == '__main__':
     field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
 
     cnn_features = (128, 128)
-    model = PolicyNetworkQ10(n=n, structure=cnn_features)
-    model_opp = PolicyNetworkQ10(n=n, structure=cnn_features)
+    model = ProbaPolicyNN(n=n, structure=cnn_features)
+    model_opp = ProbaPolicyNN(n=n, structure=cnn_features)
 
     if args.preload_path is not None:
         load_model_state(model, args.preload_path)
