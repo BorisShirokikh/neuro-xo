@@ -1,8 +1,11 @@
+from typing import Union
+
 import numpy as np
 
-from neuroxo.environment.field import X_ID
+from neuroxo.environment.field import X_ID, Field
 from neuroxo.im.augm import augm_spatial
 from neuroxo.monte_carlo_tree_search import run_search, mcts_action
+from neuroxo.players import PolicyPlayer, MCTSZeroPlayer
 
 
 def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts_kwargs):
@@ -45,66 +48,47 @@ def play_self_game(player, field=None, train=True, augm=True, mcts=False, **mcts
     return s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, v
 
 
-def play_duel(player_x, player_o, field=None, same_field_module=True, return_result_only=False,
-              mcts_x=False, mcts_o=False, search_time_x=5, search_time_o=5):
-    if field is None:
-        field = np.zeros((player_x.field.get_n(), ) * 2, dtype='float32')
-    player_x.update_field(field=field)
-    if not same_field_module:
-        player_o.update_field(field=field)
+def play_duel(player_x: Union[PolicyPlayer, MCTSZeroPlayer],
+              player_o: Union[PolicyPlayer, MCTSZeroPlayer],
+              return_result_only: bool = False, self_game: bool = False, **action_kwargs):
+    field = Field(n=player_x.n, kernel_len=player_x.field.get_kernel_len(), field=None, device=player_x.device)
+    player_x.set_field(field=field)
+    player_o.set_field(field=field)
 
     is_x_next = player_x.field.get_action_id() == X_ID
 
     player_act = player_x if is_x_next else player_o
     player_wait = player_o if is_x_next else player_x
 
-    mcts_act = mcts_x if is_x_next else mcts_o
-    mcts_wait = mcts_o if is_x_next else mcts_x
-
-    search_time_act = search_time_x if is_x_next else search_time_o
-    search_time_wait = search_time_o if is_x_next else search_time_x
-
     s_history = []      # states
     f_history = []      # features
     a_history = []      # actions
-    e_history = []      # exploitations
-    q_history = []      # policies
-    q_max_history = []  # max Q values
-    p_history = []      # probas
+    o_history = []      # player.action outputs
 
     player_act.eval()
-    player_wait.eval()
-    v = player_act.field.get_value()  # value
+    if not self_game:
+        player_wait.eval()
+    v = field.get_value()  # value
+
     while v is None:
-        s_history.append(player_act.field.get_field())
-        f_history.append(player_act.field.get_features())
+        s_history.append(field.get_field())
+        f_history.append(field.get_features())
 
-        if mcts_act:
-            q, p, a, e, v = mcts_action(player=player_act,
-                                        root=run_search(player=player_act, search_time=search_time_act))
-        else:
-            q, p, a, e, v = player_act.action(train=True)
-            field.make_move(a)
-            v = field.get_reward()
+        a, *out = player_act.action(**action_kwargs)
 
-        if not same_field_module:
-            player_wait.update_field(player_wait.field.get_field())
+        o_history.append(out)
 
-        q_history.append(q)
-        q_max_history.append(q[p > 0].max().item())
-        p_history.append(p)
-        a_history.append(a)
-        e_history.append(e)
+        v = field.get_value()
+
+        if not self_game:
+            player_wait.on_opponent_action(a)
 
         if v is None:
             player_act, player_wait = player_wait, player_act
-            mcts_act, mcts_wait = mcts_wait, mcts_act
-            search_time_act, search_time_wait = search_time_wait, search_time_act
 
     if v == 0:
         winner = 0
     else:  # v == 1:
         winner = player_act.field.get_opponent_action_id()
 
-    return winner if return_result_only\
-        else (s_history, f_history, a_history, q_history, q_max_history, p_history, e_history, winner)
+    return winner if return_result_only else (s_history, f_history, a_history, o_history, winner)

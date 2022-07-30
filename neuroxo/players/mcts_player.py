@@ -85,16 +85,12 @@ class MCTSZeroPlayer:
                 value = max(value, -self.search_tree.children[a_max].value)
             return value
 
-    def truncate_tree(self, action_series: Sequence[tuple]):
-        for i, j in action_series:
-            if self.search_tree is None:
-                return
+    def _truncate_tree(self, a: int):
+        if self.search_tree is not None:
+            if a in list(self.search_tree.children.keys()):
+                self.search_tree = self.search_tree.children[a]
             else:
-                a = self.ij2a(i, j)
-                if a in list(self.search_tree.children.keys()):
-                    self.search_tree = self.search_tree.children[a]
-                else:
-                    self.search_tree = None
+                self.search_tree = None
 
     def action(self, deterministic_by_policy: bool = False):
         """ Returns (A, P, V, V_resign). """
@@ -109,9 +105,18 @@ class MCTSZeroPlayer:
             p = np.zeros_like(N, dtype=np.float32)
             p[a] = 1
 
+        p, v, v_resign = np.reshape(p, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
+
         self._make_move(*self.a2ij(a))
 
-        return a, np.reshape(p, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
+        if self.reuse_tree:
+            self._truncate_tree(a)
+
+        return a, p, v, v_resign
+
+    def on_opponent_action(self, a: int):
+        if self.reuse_tree:
+            self._truncate_tree(a)
 
     def update_state(self, field):
         self.field.set_field(field)
