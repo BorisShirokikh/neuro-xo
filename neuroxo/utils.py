@@ -57,3 +57,8 @@ def get_random_field(n=10, min_depth=0, max_depth=10):
 
 def get_repo_root():
     return Path(neuroxo.__file__).parent.parent
+
+
+def flush(*args, **kwargs):
+    kwargs['flush'] = True
+    print(*args, **kwargs)

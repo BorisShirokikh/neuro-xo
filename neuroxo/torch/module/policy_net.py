@@ -4,6 +4,7 @@ from dpipe.layers import ResBlock2d, PostActivation2d
 from dpipe.torch import to_device
 
 from neuroxo.torch.module.layers import MaskedSoftmax
+from neuroxo.torch.utils import get_available_moves
 
 
 class ProbaPolicyNN(nn.Module):
@@ -28,13 +29,12 @@ class ProbaPolicyNN(nn.Module):
     def forward(self, x):
         logits = self.model(x)
         policy = self.tanh(logits)
-        proba = self.masked_softmax(self.flatten(logits), self.flatten(torch.sum(x[:, :2, ...], dim=1).unsqueeze(1)))
+        proba = self.masked_softmax(self.flatten(logits), self.flatten(get_available_moves(x)))
         return torch.reshape(proba, shape=(-1, 1, self.n, self.n)), policy
 
 
 class RandomProbaPolicyNN(nn.Module):
-    # FIXME: should actually generate and return random variables
-    def __init__(self, n=10, in_channels=5):
+    def __init__(self, n: int = 10, in_channels: int = 2):
         super().__init__()
         self.n = n
         self.in_channels = in_channels
@@ -44,11 +44,7 @@ class RandomProbaPolicyNN(nn.Module):
         self.masked_softmax = MaskedSoftmax(dim=1)
 
     def forward(self, x):
-        return to_device(torch.zeros((1, 1, self.n, self.n), dtype=torch.float32), device=x)
-
-    def predict_action_values(self, logits):
-        return self.tanh(logits)
-
-    def predict_proba(self, x, logits):
-        p = self.masked_softmax(self.flatten(logits), self.flatten(x[:, -1, ...].unsqueeze(1)))
-        return torch.reshape(p, shape=(-1, 1, self.n, self.n))
+        logits = to_device(torch.zeros((x.shape[0], 1, self.n, self.n), dtype=torch.float32), device=x)
+        policy = self.tanh(logits)
+        proba = self.masked_softmax(self.flatten(logits), self.flatten(get_available_moves(x)))
+        return torch.reshape(proba, shape=(-1, 1, self.n, self.n)), policy

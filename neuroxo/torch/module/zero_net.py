@@ -3,6 +3,7 @@ import torch.nn as nn
 from dpipe.layers import ResBlock2d
 
 from neuroxo.torch.module.layers import MaskedSoftmax
+from neuroxo.torch.utils import get_available_moves
 
 
 class NeuroXOZeroNN(nn.Module):
@@ -18,7 +19,7 @@ class NeuroXOZeroNN(nn.Module):
             nn.BatchNorm2d(n_features, n_features),
             nn.ReLU(),
 
-            *[ResBlock2d(n_features) for _ in range(n_blocks)]
+            *[ResBlock2d(n_features, n_features, kernel_size=3, padding=1) for _ in range(n_blocks)]
         )
 
         self.policy_head = nn.Sequential(
@@ -44,5 +45,5 @@ class NeuroXOZeroNN(nn.Module):
 
     def forward(self, x):
         logits = self.backbone(x)
-        proba = self.masked_softmax(self.flatten(logits), self.flatten(torch.sum(x[:, :2, ...], dim=1).unsqueeze(1)))
+        proba = self.masked_softmax(self.policy_head(logits), self.flatten(get_available_moves(x)))
         return torch.reshape(proba, shape=(-1, 1, self.n, self.n)), self.value_head(logits).squeeze()

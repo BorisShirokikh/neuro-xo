@@ -61,6 +61,8 @@ class Field:
 
     def make_move(self, i, j):
         if self._field[i, j] != EMPTY_ID:
+            print(self._field, flush=True)
+            print(i, j, flush=True)
             raise IndexError('Accessing already marked cell.')
 
         action_id = self._action_id
