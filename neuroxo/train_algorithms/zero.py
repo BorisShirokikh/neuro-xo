@@ -12,6 +12,7 @@ from neuroxo.players import MCTSZeroPlayer, PolicyPlayer
 from neuroxo.self_games import play_duel
 from neuroxo.torch.model import optimizer_step
 from neuroxo.torch.module.policy_net import RandomProbaPolicyNN
+from neuroxo.utils import flush
 
 
 def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
@@ -26,13 +27,16 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
     optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
 
     logger_loss_step = 0
-    for epoch in trange(n_epochs):
+    for epoch in range(n_epochs):
 
+        flush(f'>>> Generating dataset on epoch {epoch}:')
         f_epoch, pi_epoch, z_epoch = generate_train_dataset(player_best, n_episodes_per_epoch, augm=augm)
 
+        flush(f'>>> Training NN on epoch {epoch}:')
         logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
                                  batch_size=batch_size, shuffle=shuffle_data)
 
+        flush(f'>>> Validating NN on epoch {epoch}:')
         winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
 
         update_best_model(player, player_best, exp_path, epoch, winrate_vs_best, winrate_th, best_model_name)
@@ -43,7 +47,7 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
 def generate_train_dataset(player: MCTSZeroPlayer, n_episodes_per_epoch: int = 10000, augm: bool = True):
     player.eval()
     f_epoch, pi_epoch, z_epoch = [], [], []
-    for i in range(n_episodes_per_epoch):
+    for i in trange(n_episodes_per_epoch):
         f_episode, pi_episode, z_episode = run_episode(player=player, augm=augm)
         f_epoch += f_episode
         pi_epoch += pi_episode
@@ -124,9 +128,9 @@ def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summar
     player_best.eval()
 
     stats_xo = np.array([play_duel(player, player_best, return_result_only=True)
-                         for _ in range(n_val_games // 2)])
+                         for _ in trange(n_val_games // 2)])
     stats_ox = np.array([play_duel(player_best, player, return_result_only=True)
-                         for _ in range(n_val_games // 2)])
+                         for _ in trange(n_val_games // 2)])
     winrate_vs_best = np.mean(np.concatenate((stats_xo, -stats_ox)) == 1)
     logger.add_scalar('winrate/vs_best', winrate_vs_best, epoch)
 
@@ -136,9 +140,9 @@ def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summar
         player_random.eval()
 
         stats_xo = np.array([play_duel(player, player_random, return_result_only=True)
-                             for _ in range(n_val_games // 2)])
+                             for _ in trange(n_val_games // 2)])
         stats_ox = np.array([play_duel(player_random, player, return_result_only=True)
-                             for _ in range(n_val_games // 2)])
+                             for _ in trange(n_val_games // 2)])
         logger.add_scalar('winrate/vs_random', np.mean(np.concatenate((stats_xo, -stats_ox)) == 1), epoch)
 
         del player_random

@@ -57,10 +57,12 @@ class MCTSZeroPlayer:
 
         if self.reuse_tree and (self.search_tree is not None):
             root = self.search_tree
+            n_start_iter = root.n
         else:
             root = NodeState(None, search_field.get_running_features(), self.model, c_puct=self.c_puct, eps=self.eps)
+            n_start_iter = 0
 
-        for _ in range(self.n_search_iter):
+        for _ in range(n_start_iter, self.n_search_iter):
             node = root
             parent = None
 

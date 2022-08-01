@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 
+from dpipe.io import choose_existing
 from torch.utils.tensorboard import SummaryWriter
 
 from neuroxo.torch.module.zero_net import NeuroXOZeroNN
@@ -11,19 +12,22 @@ from neuroxo.train_algorithms.zero import train_zero
 
 if __name__ == '__main__':
     # ### CONFIG ###
-    base_path = Path('/home/boris/Desktop/workspace/experiments/rl/zero/')
-    exp_name = 'test_zero'
+    base_path = choose_existing(
+        Path('/home/boris/Desktop/workspace/experiments/rl/zero/'),
+        Path('/shared/experiments/rl/ttt_10x10/')
+    )
+    exp_name = 'zero_v0'
 
-    device = 'cpu'
+    device = 'cuda'
 
     n = 10
     kernel_len = 5
 
     in_channels = 2  # FIXME: should depend on feature generator
-    n_blocks = 2
-    n_features = 16
+    n_blocks = 11
+    n_features = 196
 
-    n_search_iter = 100
+    n_search_iter = 1000
     c_puct = 5.
     eps = 0.25
     exploration_depth = 16
@@ -34,15 +38,15 @@ if __name__ == '__main__':
     lr_init = 3e-4
     n_dec_steps = 4
 
-    n_epochs = 3
-    n_episodes_per_epoch = 10
-    n_val_games = 10
-    batch_size = 4
+    n_epochs = 100
+    n_episodes_per_epoch = 1000
+    n_val_games = 100
+    batch_size = 256
 
-    augm = True
+    augm = True  # TODO: we need to augm every state, not the whole episode, since training time << generating data time
     shuffle_data = True
 
-    winrate_th = 0.55
+    winrate_th = 0.6
 
     val_vs_random = True
     # ### ###### ###
