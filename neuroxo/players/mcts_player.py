@@ -7,7 +7,6 @@ from dpipe.torch import to_device, to_np
 
 from neuroxo.environment import Field
 from neuroxo.torch.utils import get_available_moves
-from neuroxo.utils import flush
 
 
 class MCTSZeroPlayer:
@@ -147,10 +146,8 @@ class NodeState:
         self.eps = eps
         if eps is not None:
             self.P *= (1 - eps)
-            self.P += eps * np.random.dirichlet(np.ones_like(self.P) * 0.02) * self.avail_moves
+            self.P += eps * np.random.dirichlet(np.ones_like(self.P) * 0.08) * self.avail_moves
             self.P /= self.P.sum()
-            # flush(self.P)
-            # flush('=========================================================================')
 
         self.N = np.zeros_like(self.P)
         self.n = 0

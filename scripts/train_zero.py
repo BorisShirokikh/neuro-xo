@@ -14,9 +14,10 @@ if __name__ == '__main__':
     # ### CONFIG ###
     base_path = choose_existing(
         Path('/home/boris/Desktop/workspace/experiments/rl/zero/'),
-        Path('/shared/experiments/rl/ttt_10x10/')
+        Path('/shared/experiments/rl/ttt_10x10/'),
+        Path('/gpfs/gpfs0/b.shirokikh/experiments/rl/ttt_10x10/'),
     )
-    exp_name = 'zero_v0'
+    exp_name = 'zero_v2'
 
     device = 'cuda'
 
@@ -35,15 +36,16 @@ if __name__ == '__main__':
     reuse_tree = True
     deterministic_by_policy = False
 
-    lr_init = 3e-4
+    lr_init = 4e-4
     n_dec_steps = 4
 
     n_epochs = 100
     n_episodes_per_epoch = 1000
-    n_val_games = 100
+    n_val_games = 20
+    n_search_iter_val = n_search_iter
     batch_size = 256
 
-    augm = True  # TODO: we need to augm every state, not the whole episode, since training time << generating data time
+    augm = True
     shuffle_data = True
 
     winrate_th = 0.6
@@ -76,4 +78,5 @@ if __name__ == '__main__':
 
     train_zero(player, player_best, logger, exp_path, n_epochs=n_epochs, n_episodes_per_epoch=n_episodes_per_epoch,
                n_val_games=n_val_games, batch_size=batch_size, lr_init=lr_init, epoch2lr=epoch2lr, augm=augm,
-               shuffle_data=shuffle_data, best_model_name='model', winrate_th=winrate_th, val_vs_random=val_vs_random)
+               shuffle_data=shuffle_data, best_model_name='model', winrate_th=winrate_th, val_vs_random=val_vs_random,
+               n_search_iter_val=n_search_iter_val)

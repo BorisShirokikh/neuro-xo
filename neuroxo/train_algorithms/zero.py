@@ -18,7 +18,8 @@ from neuroxo.utils import flush
 def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
                n_epochs: int = 100, n_episodes_per_epoch: int = 10000, n_val_games: int = 400, batch_size: int = 256,
                lr_init: float = 4e-3, epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True,
-               best_model_name: str = 'model', winrate_th: float = 0.55, val_vs_random: bool = False,):
+               best_model_name: str = 'model', winrate_th: float = 0.55, val_vs_random: bool = False,
+               n_search_iter_val: int = 100):
     exp_path = Path(exp_path)
     best_model_path = exp_path / f'{best_model_name}.pth'
     if not best_model_path.exists():
@@ -37,7 +38,8 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
                                  batch_size=batch_size, shuffle=shuffle_data)
 
         flush(f'>>> Validating NN on epoch {epoch}:')
-        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
+        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games,
+                                   val_vs_random=val_vs_random, n_search_iter_val=n_search_iter_val)
 
         update_best_model(player, player_best, exp_path, epoch, winrate_vs_best, winrate_th, best_model_name)
 
@@ -63,19 +65,20 @@ def run_episode(player: MCTSZeroPlayer, augm: bool = True):
     pi_history = [o[0][None, None] for o in o_history]
 
     if augm:
-        if np.random.rand() <= 0.75:
-            k = np.random.randint(low=1, high=4)
-            f_history = np.rot90(f_history, k=k, axes=(-2, -1))
-            pi_history = np.rot90(pi_history, k=k, axes=(-2, -1))
-        if np.random.rand() <= 0.5:
-            flip_axis = np.random.choice((-2, -1))
-            f_history = np.flip(f_history, axis=flip_axis)
-            pi_history = np.flip(pi_history, axis=flip_axis)
-
-        if isinstance(f_history, np.ndarray):
-            f_history = f_history.tolist()
-        if isinstance(pi_history, np.ndarray):
-            pi_history = pi_history.tolist()
+        f_history_augm, pi_history_augm = [], []
+        for i in range(len(z_history)):
+            f, pi = f_history[i], pi_history[i]
+            if np.random.rand() <= 0.75:
+                k = np.random.randint(low=1, high=4)
+                f = np.rot90(f, k=k, axes=(-2, -1))
+                pi = np.rot90(pi, k=k, axes=(-2, -1))
+            if np.random.rand() <= 0.5:
+                flip_axis = np.random.choice((-2, -1))
+                f = np.flip(f, axis=flip_axis)
+                pi = np.flip(pi, axis=flip_axis)
+            f_history_augm.append(f)
+            pi_history_augm.append(pi)
+        f_history, pi_history = f_history_augm, pi_history_augm
 
     return f_history, pi_history, z_history
 
@@ -98,7 +101,7 @@ def train(player: MCTSZeroPlayer, optimizer: torch.optim.Optimizer, logger: Summ
     n_steps = train_size // batch_size + 1
     skip_last_batch = False
 
-    for i in range(n_steps):
+    for i in trange(n_steps):
         z = to_var(z_stack[i * batch_size: (i + 1) * batch_size], device=player.device)
         if len(z) < batch_size * min_batch_size_fraction:
             skip_last_batch = True
@@ -118,11 +121,16 @@ def train(player: MCTSZeroPlayer, optimizer: torch.optim.Optimizer, logger: Summ
 
 
 def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, epoch: int,
-             n_val_games: int = 400, val_vs_random: bool = False):
+             n_val_games: int = 400, val_vs_random: bool = False, n_search_iter_val: int = 100):
     deterministic_by_policy = player.deterministic_by_policy
     deterministic_by_policy_best = player_best.deterministic_by_policy
     player.deterministic_by_policy = True
     player_best.deterministic_by_policy = True
+
+    n_search_iter = player.n_search_iter
+    n_search_iter_best = player_best.n_search_iter
+    player.n_search_iter = n_search_iter_val
+    player_best.n_search_iter = n_search_iter_val
 
     player.eval()
     player_best.eval()
@@ -149,6 +157,10 @@ def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summar
 
     player.deterministic_by_policy = deterministic_by_policy
     player_best.deterministic_by_policy = deterministic_by_policy_best
+
+    player.n_search_iter = n_search_iter
+    player_best.n_search_iter = n_search_iter_best
+
     return winrate_vs_best
 
 
