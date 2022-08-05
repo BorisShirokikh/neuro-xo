@@ -16,10 +16,9 @@ from neuroxo.utils import flush
 
 
 def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-               n_epochs: int = 100, n_episodes_per_epoch: int = 10000, n_val_games: int = 400, batch_size: int = 256,
+               n_epochs: int = 100, n_episodes_per_epoch: int = 10000, n_val_games: int = 20, batch_size: int = 256,
                lr_init: float = 4e-3, epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True,
-               best_model_name: str = 'model', winrate_th: float = 0.55, val_vs_random: bool = False,
-               n_search_iter_val: int = 100):
+               best_model_name: str = 'model', winrate_th: float = 0.6, val_vs_random: bool = False):
     exp_path = Path(exp_path)
     best_model_path = exp_path / f'{best_model_name}.pth'
     if not best_model_path.exists():
@@ -38,8 +37,7 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
                                  batch_size=batch_size, shuffle=shuffle_data)
 
         flush(f'>>> Validating NN on epoch {epoch}:')
-        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games,
-                                   val_vs_random=val_vs_random, n_search_iter_val=n_search_iter_val)
+        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
 
         update_best_model(player, player_best, exp_path, epoch, winrate_vs_best, winrate_th, best_model_name)
 
@@ -121,16 +119,16 @@ def train(player: MCTSZeroPlayer, optimizer: torch.optim.Optimizer, logger: Summ
 
 
 def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, epoch: int,
-             n_val_games: int = 400, val_vs_random: bool = False, n_search_iter_val: int = 100):
+             n_val_games: int = 400, val_vs_random: bool = False):
     deterministic_by_policy = player.deterministic_by_policy
     deterministic_by_policy_best = player_best.deterministic_by_policy
     player.deterministic_by_policy = True
     player_best.deterministic_by_policy = True
 
-    n_search_iter = player.n_search_iter
-    n_search_iter_best = player_best.n_search_iter
-    player.n_search_iter = n_search_iter_val
-    player_best.n_search_iter = n_search_iter_val
+    eps = player.eps
+    eps_best = player_best.eps
+    player.eps = None
+    player_best.eps = None
 
     player.eval()
     player_best.eval()
@@ -158,8 +156,8 @@ def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summar
     player.deterministic_by_policy = deterministic_by_policy
     player_best.deterministic_by_policy = deterministic_by_policy_best
 
-    player.n_search_iter = n_search_iter
-    player_best.n_search_iter = n_search_iter_best
+    player.eps = eps
+    player_best.eps = eps_best
 
     return winrate_vs_best
 

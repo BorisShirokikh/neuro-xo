@@ -17,7 +17,7 @@ if __name__ == '__main__':
         Path('/shared/experiments/rl/ttt_10x10/'),
         Path('/gpfs/gpfs0/b.shirokikh/experiments/rl/ttt_10x10/'),
     )
-    exp_name = 'zero_v2'
+    exp_name = 'zero_v3'
 
     device = 'cuda'
 
@@ -28,10 +28,10 @@ if __name__ == '__main__':
     n_blocks = 11
     n_features = 196
 
-    n_search_iter = 1000
+    n_search_iter = 1200
     c_puct = 5.
     eps = 0.25
-    exploration_depth = 16
+    exploration_depth = 12
     temperature = 1.
     reuse_tree = True
     deterministic_by_policy = False
@@ -42,7 +42,6 @@ if __name__ == '__main__':
     n_epochs = 100
     n_episodes_per_epoch = 1000
     n_val_games = 20
-    n_search_iter_val = n_search_iter
     batch_size = 256
 
     augm = True
@@ -78,5 +77,4 @@ if __name__ == '__main__':
 
     train_zero(player, player_best, logger, exp_path, n_epochs=n_epochs, n_episodes_per_epoch=n_episodes_per_epoch,
                n_val_games=n_val_games, batch_size=batch_size, lr_init=lr_init, epoch2lr=epoch2lr, augm=augm,
-               shuffle_data=shuffle_data, best_model_name='model', winrate_th=winrate_th, val_vs_random=val_vs_random,
-               n_search_iter_val=n_search_iter_val)
+               shuffle_data=shuffle_data, best_model_name='model', winrate_th=winrate_th, val_vs_random=val_vs_random)

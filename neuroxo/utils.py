@@ -26,3 +26,7 @@ def get_repo_root():
 def flush(*args, **kwargs):
     kwargs['flush'] = True
     print(*args, **kwargs)
+
+
+def np_rand_argmax(a):
+    return np.random.choice(np.where(a == a.max())[0])

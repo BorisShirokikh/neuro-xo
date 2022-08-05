@@ -6,7 +6,9 @@ import torch.nn as nn
 from dpipe.torch import to_device, to_np
 
 from neuroxo.environment import Field
+from neuroxo.im.augm import get_dihedral_augm_fn
 from neuroxo.torch.utils import get_available_moves
+from neuroxo.utils import np_rand_argmax
 
 
 class MCTSZeroPlayer:
@@ -56,6 +58,7 @@ class MCTSZeroPlayer:
 
         if self.reuse_tree and (self.search_tree is not None):
             root = self.search_tree
+            root.set_exploration_proba(eps=self.eps)
             n_start_iter = root.n
         else:
             root = NodeState(None, search_field.get_running_features(), self.model, c_puct=self.c_puct, eps=self.eps)
@@ -71,11 +74,9 @@ class MCTSZeroPlayer:
                 search_field.make_move(*self.a2ij(action))
 
             value = search_field.get_value()
-            depth = search_field.get_depth()
 
             if value is None:
-                value = - parent.expand(action, search_field.get_running_features(), self.model,
-                                        return_leaf=True, exploration=depth <= self.exploration_depth).value
+                value = - parent.expand(action, search_field.get_running_features(), self.model, return_leaf=True).value
 
             parent.backup(value)
             search_field.set_field(root_field)
@@ -107,18 +108,19 @@ class MCTSZeroPlayer:
             p = N ** (1 / self.temperature) / n ** (1 / self.temperature)
             a = np.random.choice(np.arange(len(N)), p=p)
         else:
-            a = np.argmax(N)
+            a = np_rand_argmax(N)
             p = np.zeros_like(N, dtype=np.float32)
             p[a] = 1
 
         p, v, v_resign = np.reshape(p, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
+        proba = np.reshape(self.search_tree.P, (self.n, self.n))
 
         self._make_move(*self.a2ij(a))
 
         if self.reuse_tree:
             self._truncate_tree(a)
 
-        return a, p, v, v_resign
+        return a, p, v, v_resign, proba
 
     def on_opponent_action(self, a: int):
         if self.reuse_tree:
@@ -135,43 +137,54 @@ class MCTSZeroPlayer:
 
 class NodeState:
     def __init__(self, parent, running_features, model, c_puct: float = 5, eps: float = None):
-        proba, value = model(running_features)
+        augm_fn, inv_augm_fn = get_dihedral_augm_fn(return_inverse=True)
+        proba, value = model(augm_fn(running_features))
+        proba = inv_augm_fn(proba)
+
         self.avail_moves = to_np(get_available_moves(running_features)).ravel()
 
         self.value = value.item()
-
         self.P = to_np(proba).ravel()
-        # flush(self.P)
 
+        self.c_puct = c_puct
         self.eps = eps
-        if eps is not None:
-            self.P *= (1 - eps)
-            self.P += eps * np.random.dirichlet(np.ones_like(self.P) * 0.08) * self.avail_moves
-            self.P /= self.P.sum()
+
+        self.U = c_puct * self.P
+        self.set_exploration_proba(eps=eps)
 
         self.N = np.zeros_like(self.P)
         self.n = 0
         self.Q = np.zeros_like(self.P)
         self.Q[self.avail_moves == 0] = -np.inf
 
-        self.c_puct = c_puct
-        self.U = c_puct * self.P
-
         self.parent = parent
         self.last_action = None
         self.children = dict()
+
+    def set_exploration_proba(self, eps: float = None):
+        self.eps = eps
+        if eps is not None:
+            if eps > 0:
+                p_old = np.copy(self.P)
+                self.P *= (1 - eps)
+                self.P += eps * np.random.dirichlet(np.ones_like(self.P) * 0.02) * self.avail_moves
+                self.P /= self.P.sum()
+                
+                am = np.bool_(self.avail_moves)
+                self.U[am] *= self.P[am] / p_old[am]
 
     def expanded(self):
         return len(self.children) > 0
 
     def select(self):
+        # TODO: # the randomized operation is 10 times slower, the resulting MCTS is approx. 1.5 slower in a self-game
         a = np.argmax(self.Q + self.U)
+        # a = np_rand_argmax(self.Q + self.U)
         self.last_action = a
         return (a, self.children[a]) if a in list(self.children.keys()) else (a, None)
 
-    def expand(self, a, running_features, model, return_leaf: bool = False, exploration: bool = True):
-        self.children[a] = NodeState(self, running_features, model, c_puct=self.c_puct,
-                                     eps=self.eps if exploration else None)
+    def expand(self, a, running_features, model, return_leaf: bool = False):
+        self.children[a] = NodeState(self, running_features, model, c_puct=self.c_puct)
         if return_leaf:
             return self.children[a]
 

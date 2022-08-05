@@ -29,6 +29,7 @@ def play_duel(player_x: Union[PolicyPlayer, MCTSZeroPlayer],
 
         a, *out = player_act.action()
 
+        a_history.append(a)
         o_history.append(out)
 
         v = field.get_value()
