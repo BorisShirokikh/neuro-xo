@@ -38,3 +38,11 @@ def update_lr(optimizer: torch.optim.Optimizer, epoch2lr: dict, epoch: int):
         optimizer.param_groups[0]['lr'] = epoch2lr[epoch]
     except (KeyError, TypeError):  # (no such epochs in the dict, dict is None)
         pass
+
+
+def s2hhmmss(s: float):
+    s = int(s)
+    hh = s // 3600
+    mm = (s % 3600) // 60
+    ss = s % 60
+    return f'{hh:03d}:{mm:02d}:{ss:02d}'
