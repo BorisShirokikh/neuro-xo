@@ -19,7 +19,7 @@ DRAW_VALUE = 0
 
 
 class Field:
-    def __init__(self, n: int = 10, kernel_len: int = 5, field: Union[np.ndarray, torch.Tensor] = None,
+    def __init__(self, n: int = 10, k: int = 5, field: Union[np.ndarray, torch.Tensor] = None,
                  device: str = 'cpu'):
         # Player0 = 'x', it's player_id (action_id) = 1 = X_ID
         # Player1 = 'o', it's player_id (action_id) = -1 = O_ID
@@ -37,11 +37,11 @@ class Field:
             self._n = self._field.shape[0]
             self._action_id = self._get_action_id()
 
-        self._kernel_len = kernel_len
+        self._k = k
         self._device = device
         self._features = self._field2features()
         self._running_features = self._get_running_features()
-        self._check_kernels = {d: to_device(_get_check_kernel(d, kernel_len=kernel_len), device=device)
+        self._check_kernels = {d: to_device(_get_check_kernel(d, k=k), device=device)
                                for d in DIRECTIONS}
         self._game_history = []
 
@@ -99,9 +99,9 @@ class Field:
 
         # Sequential checks-returns and inverse (not return_how) typing to reduce computations:
         for d in DIRECTIONS:
-            by_d = self._check_kernels[d](t) >= self._kernel_len
+            by_d = self._check_kernels[d](t) >= self._k
             if torch.any(by_d):
-                return True if (not return_how) else (True, 'row', _get_win_center(by_d, d, self._kernel_len))
+                return True if (not return_how) else (True, 'row', _get_win_center(by_d, d, self._k))
 
         return (False, None, None) if return_how else False
 
@@ -112,7 +112,7 @@ class Field:
         return np.count_nonzero(field)
 
     def get_value(self):
-        if self.get_depth() > (self._kernel_len * 2 - 2):  # slightly reduces computations
+        if self.get_depth() > (self._k * 2 - 2):  # slightly reduces computations
             if self.check_win():
                 return WIN_VALUE
             elif self.check_draw():
@@ -132,6 +132,9 @@ class Field:
     def get_n(self):
         return self._n
 
+    def get_k(self):
+        return self._k
+
     def get_action_id(self):
         return self._action_id
 
@@ -146,9 +149,6 @@ class Field:
         return self._features.shape[1]
 
     # ############################################### UTILS SECTION ##################################################
-
-    def get_kernel_len(self):
-        return self._kernel_len
 
     def _get_action_id(self, field=None):
         field = self._field if field is None else field
@@ -174,17 +174,17 @@ class Field:
         return to_var(np.copy(self._field2features(field=self._field)), device=self._device)
 
 
-def _get_check_kernel(direction, kernel_len=5):
+def _get_check_kernel(direction, k=5):
     if direction not in DIRECTIONS:
         raise ValueError(f'`direction` must be one of the {DIRECTIONS}, {direction} given')
 
     if 'diag' in direction:  # 'diag' and 'diag1'
-        kernel_size = kernel_len
-        kernel_w = torch.tensor(np.array([[np.eye(kernel_len, dtype=np.float32)]]))
+        kernel_size = k
+        kernel_w = torch.tensor(np.array([[np.eye(k, dtype=np.float32)]]))
         kernel_w = kernel_w.flip(dims=(-1,)) if '1' in direction else kernel_w
     else:  # 'row' and 'col'
-        kernel_size = (1, kernel_len) if direction == 'row' else (kernel_len, 1)
-        kernel_w = torch.tensor([[[[1.] * kernel_len]]])
+        kernel_size = (1, k) if direction == 'row' else (k, 1)
+        kernel_w = torch.tensor([[[[1.] * k]]])
         kernel_w = kernel_w.transpose(-2, -1) if direction == 'col' else kernel_w
 
     kernel = nn.Conv2d(1, 1, kernel_size, bias=False)

@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
     cnn_features = (128, 64)
 
-    field = Field(n=n, kernel_len=kernel_len, device=device, check_device=device)
+    field = Field(n=n, k=kernel_len, device=device, check_device=device)
 
     model = PolicyNetworkQ10Light(n=n, structure=cnn_features)
     model_path = get_repo_root() / 'agents' / 'q_10x10' / 'model_5.pth'

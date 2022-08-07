@@ -29,7 +29,6 @@ def main():
         Path('/shared/experiments/rl/ttt_10x10/'),
         Path('/gpfs/gpfs0/b.shirokikh/experiments/rl/ttt_10x10/'),
     )
-    # exp_name = 'zero_v2'
     exp_name = args.exp_name
     vis_name = args.vis_name
 
@@ -38,18 +37,18 @@ def main():
     n_blocks = 11
     n_features = 196
 
-    n_search_iter = 1000
+    n_search_iter = 1600
     c_puct = 5.
     eps = args.eps
     exploration_depth = 16
     temperature = 1.
     reuse_tree = True
-    deterministic_by_policy = True
+    deterministic_by_policy = False
     # ### ###### ###
 
     os.makedirs(base_path / exp_name / vis_name, exist_ok=True)
 
-    field = Field(n=10, kernel_len=5, device=device)
+    field = Field(n=10, k=5, device=device)
     model = NeuroXOZeroNN(n=10, in_channels=2, n_blocks=n_blocks, n_features=n_features)
     player = MCTSZeroPlayer(model=model, field=field, device=device, n_search_iter=n_search_iter, c_puct=c_puct,
                             eps=eps, exploration_depth=exploration_depth, temperature=temperature,
@@ -62,16 +61,18 @@ def main():
 
     flush('Performance time:', t2 - t1, 's')
 
-    v_history, v_resign_history, proba_history = [], [], []
+    pi_history, v_history, v_resign_history, proba_history = [], [], [], []
     for o in o_history:
+        pi_history.append(o[0])
         v_history.append(o[1])
         v_resign_history.append(o[2])
         proba_history.append(o[3])
-    s, a, v, v_resign, p = np.array(s_history), np.array(a_history), np.array(v_history), np.array(v_resign_history),\
-        np.array(proba_history)
+    s, a, pi, v, v_resign, p = np.array(s_history), np.array(a_history), np.array(pi_history), np.array(v_history),\
+        np.array(v_resign_history), np.array(proba_history)
 
     save(s, base_path / exp_name / vis_name / 's.npy')
     save(a, base_path / exp_name / vis_name / 'a.npy')
+    save(pi, base_path / exp_name / vis_name / 'pi.npy')
     save(v, base_path / exp_name / vis_name / 'v.npy')
     save(v_resign, base_path / exp_name / vis_name / 'v_resign.npy')
     save(p, base_path / exp_name / vis_name / 'p.npy')

@@ -1,19 +1,18 @@
 import numpy as np
-import torch
 
 from dpipe.torch import to_device, to_np
 
-from neuroxo.torch.utils import get_available_moves
+from neuroxo.torch.module.policy_net import ProbaPolicyNN
+from neuroxo.environment import Field
 
 
 class PolicyPlayer:
-    def __init__(self, model, field, eps=0.0, device='cpu'):
+    def __init__(self, model: ProbaPolicyNN, field: Field, device: str = 'cpu', eps: float = 0.25):
         self.model = to_device(model, device=device)
         self.field = field
-        self.eps = eps
         self.device = device
+        self.eps = eps
 
-        # fields to slightly speedup computation:
         self.n = self.field.get_n()
 
         self.eval()
@@ -21,33 +20,28 @@ class PolicyPlayer:
     def _make_move(self, i, j):
         self.field.make_move(i, j)
 
-    def _calc_move(self, policy, eps):
+    def _calc_move(self, proba: np.ndarray):
         """
-        eps = None  : proba choice
-        eps = 0     : greedy choice
-        eps > 0     : eps-greedy choice
+        eps = None  : proba choice          : on-policy
+        eps = 0     : greedy choice         : greedy
+        eps > 0     : eps-greedy choice     : off-policy
         """
-        avail_a = torch.nonzero(get_available_moves(self.field.get_running_features()).reshape(-1)).reshape(-1)
-        n_a = len(avail_a)
-
-        avail_p = policy.reshape(-1)[avail_a]
-
-        # greedy choice:
-        a_idx = torch.argmax(avail_p).item()
-
-        if eps is None:  # proba choice:
-            _a_idx = np.random.choice(np.arange(n_a), p=to_np(avail_p))
-            a_idx = _a_idx
+        if self.eps is None:
+            p = proba.ravel()
+            return np.random.choice(np.arange(len(p)), p=p)
         else:
-            if eps > 0:  # eps-greedy
-                soft_p = np.zeros(n_a) + eps / n_a
-                soft_p[a_idx] += (1 - eps)
-                _a_idx = np.random.choice(np.arange(n_a), p=soft_p)
+            if self.eps == 0:
+                return proba.argmax()
+            else:
+                n = self.n ** 2
+                p = proba.ravel()
+                unavail_a = self.field._field.ravel().nonzero()
 
-                a_idx = _a_idx
+                soft_p = np.zeros((n, ), dtype=np.float32) + self.eps / (n - len(unavail_a[0]))
+                soft_p[unavail_a] = 0
+                soft_p[p.argmax()] += (1 - self.eps)
 
-        a = avail_a[a_idx].item()
-        return a
+                return np.random.choice(np.arange(n), p=soft_p)
 
     def a2ij(self, a):
         return a // self.n, a % self.n
@@ -64,22 +58,10 @@ class PolicyPlayer:
     def forward(self, x):
         return self.model(x)
 
-    def predict_action_values(self, logits):
-        return self.model.predict_action_values(logits)
-
-    def forward_state(self):
-
-        state = self.field.get_running_features()
-        logits = self.forward(state)
-        policy = self.predict_action_values(logits)
-        proba = self.model.predict_proba(state, logits)
-        return policy[0][0], proba[0][0]
-
     def action(self):
-        eps = self.eps
-        proba, policy = self.model(self.field.get_running_features())
-        proba, policy = proba[0][0], policy[0][0]
-        action = self._calc_move(policy=proba, eps=eps) if (eps is None) else self._calc_move(policy=policy, eps=eps)
+        proba, policy = self.forward(self.field.get_running_features())
+        proba, policy = to_np(proba[0][0]), to_np(policy[0][0])
+        action = self._calc_move(proba)
 
         self._make_move(*self.a2ij(action))
 

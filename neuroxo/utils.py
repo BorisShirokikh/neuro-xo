@@ -3,6 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+import torch
 
 import neuroxo
 
@@ -30,3 +31,10 @@ def flush(*args, **kwargs):
 
 def np_rand_argmax(a):
     return np.random.choice(np.where(a == a.max())[0])
+
+
+def update_lr(optimizer: torch.optim.Optimizer, epoch2lr: dict, epoch: int):
+    try:
+        optimizer.param_groups[0]['lr'] = epoch2lr[epoch]
+    except (KeyError, TypeError):  # (no such epochs in the dict, dict is None)
+        pass

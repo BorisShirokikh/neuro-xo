@@ -12,11 +12,11 @@ from neuroxo.players import MCTSZeroPlayer, PolicyPlayer
 from neuroxo.self_games import play_duel
 from neuroxo.torch.model import optimizer_step
 from neuroxo.torch.module.policy_net import RandomProbaPolicyNN
-from neuroxo.utils import flush
+from neuroxo.utils import flush, update_lr
 
 
 def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-               n_epochs: int = 100, n_episodes_per_epoch: int = 10000, n_val_games: int = 20, batch_size: int = 256,
+               n_epochs: int = 100, n_episodes: int = 10000, n_val_games: int = 20, batch_size: int = 256,
                lr_init: float = 4e-3, epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True,
                best_model_name: str = 'model', winrate_th: float = 0.6, val_vs_random: bool = False):
     exp_path = Path(exp_path)
@@ -30,7 +30,7 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
     for epoch in range(n_epochs):
 
         flush(f'>>> Generating dataset on epoch {epoch}:')
-        f_epoch, pi_epoch, z_epoch = generate_train_dataset(player_best, n_episodes_per_epoch, augm=augm)
+        f_epoch, pi_epoch, z_epoch = generate_train_dataset(player_best, n_episodes, augm=augm)
 
         flush(f'>>> Training NN on epoch {epoch}:')
         logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
@@ -42,6 +42,8 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
         update_best_model(player, player_best, exp_path, epoch, winrate_vs_best, winrate_th, best_model_name)
 
         update_lr(optimizer, epoch2lr=epoch2lr, epoch=epoch)
+
+        flush()
 
 
 def generate_train_dataset(player: MCTSZeroPlayer, n_episodes_per_epoch: int = 10000, augm: bool = True):
@@ -170,8 +172,36 @@ def update_best_model(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, exp_p
         load_model_state(player_best.model, exp_path / f'{best_model_name}.pth')
 
 
-def update_lr(optimizer: torch.optim.Optimizer, epoch2lr: dict, epoch: int):
-    try:
-        optimizer.param_groups[0]['lr'] = epoch2lr[epoch]
-    except (KeyError, TypeError):  # (no such epochs in the dict, dict is None)
-        pass
+# ###
+
+
+def overfit_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
+                 n_epochs: int = 100, n_episodes: int = 1000, n_val_games: int = 20, batch_size: int = 128,
+                 lr_init: float = 4e-3, epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True,
+                 best_model_name: str = 'model', winrate_th: float = 0.6, val_vs_random: bool = False):
+    exp_path = Path(exp_path)
+    best_model_path = exp_path / f'{best_model_name}.pth'
+    if not best_model_path.exists():
+        save_model_state(player_best.model, best_model_path)
+
+    optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
+
+    flush(f'>>> Generating dataset:')
+    f_epoch, pi_epoch, z_epoch = generate_train_dataset(player_best, n_episodes, augm=augm)
+    flush()
+
+    logger_loss_step = 0
+    for epoch in range(n_epochs):
+
+        flush(f'>>> Training NN on epoch {epoch}:')
+        logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
+                                 batch_size=batch_size, shuffle=shuffle_data)
+
+        flush(f'>>> Validating NN on epoch {epoch}:')
+        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
+
+        update_best_model(player, player_best, exp_path, epoch, winrate_vs_best, winrate_th, best_model_name)
+
+        update_lr(optimizer, epoch2lr=epoch2lr, epoch=epoch)
+
+        flush()

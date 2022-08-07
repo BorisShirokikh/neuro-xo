@@ -7,7 +7,7 @@ from neuroxo.players import PolicyPlayer, MCTSZeroPlayer
 def play_duel(player_x: Union[PolicyPlayer, MCTSZeroPlayer],
               player_o: Union[PolicyPlayer, MCTSZeroPlayer],
               return_result_only: bool = False, self_game: bool = False):
-    field = Field(n=player_x.n, kernel_len=player_x.field.get_kernel_len(), field=None, device=player_x.device)
+    field = Field(n=player_x.n, k=player_x.field.get_k(), field=None, device=player_x.device)
     player_x.set_field(field=field)
     player_o.set_field(field=field)
 
@@ -24,13 +24,15 @@ def play_duel(player_x: Union[PolicyPlayer, MCTSZeroPlayer],
     v = field.get_value()  # value
 
     while v is None:
-        s_history.append(field.get_field())
-        f_history.append(field.get_features())
+        if not return_result_only:
+            s_history.append(field.get_field())
+            f_history.append(field.get_features())
 
         a, *out = player_act.action()
 
-        a_history.append(a)
-        o_history.append(out)
+        if not return_result_only:
+            a_history.append(a)
+            o_history.append(out)
 
         v = field.get_value()
 

@@ -17,7 +17,7 @@ class ProbaPolicyNN(nn.Module):
 
         self.model = nn.Sequential(
             nn.Conv2d(in_channels, n_features, kernel_size=3, padding=1, bias=False),
-            nn.Sequential(*[ResBlock2d(n_features, n_features, kernel_size=3, padding=1) for _ in range(n_features)]),
+            nn.Sequential(*[ResBlock2d(n_features, n_features, kernel_size=3, padding=1) for _ in range(n_blocks)]),
             PostActivation2d(n_features, n_features, kernel_size=1, padding=0),
             nn.Conv2d(n_features, 1, kernel_size=1, padding=0, bias=True),
         )

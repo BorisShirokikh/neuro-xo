@@ -41,7 +41,7 @@ if __name__ == '__main__':
         if pair in list(log.keys()):
             continue
 
-        field = Field(n=10, kernel_len=5, field=None, device=args.device, check_device=args.device)
+        field = Field(n=10, k=5, field=None, device=args.device, check_device=args.device)
 
         model_x = ProbaPolicyNN(n=10, structure=(128, 128))
         load_model_state(model_x, EXP_PATH / pair.split('|')[0])

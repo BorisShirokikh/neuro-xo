@@ -2,18 +2,18 @@ from math import sqrt
 from typing import Union
 
 import numpy as np
-import torch.nn as nn
 from dpipe.torch import to_device, to_np
 
 from neuroxo.environment import Field
-from neuroxo.im.augm import get_dihedral_augm_fn
+from neuroxo.im.augm import get_dihedral_augm_torch_fn
+from neuroxo.torch.module.zero_net import NeuroXOZeroNN
 from neuroxo.torch.utils import get_available_moves
 from neuroxo.utils import np_rand_argmax
 
 
 class MCTSZeroPlayer:
-    def __init__(self, model: nn.Module, field: Field, device: str = 'cpu',
-                 n_search_iter: int = 1600, c_puct: float = 5, eps: float = 0.25, exploration_depth: int = 16,
+    def __init__(self, model: NeuroXOZeroNN, field: Field, device: str = 'cpu',
+                 n_search_iter: int = 1600, c_puct: float = 5, eps: float = 0.25, exploration_depth: int = 12,
                  temperature: float = 1., reuse_tree: bool = True, deterministic_by_policy: bool = False):
         self.model = to_device(model, device=device)
         self.field = field
@@ -53,8 +53,8 @@ class MCTSZeroPlayer:
         self.field.make_move(i, j)
 
     def _run_search(self):
-        n, k, root_field = self.field.get_n(), self.field.get_kernel_len(), self.field.get_field()
-        search_field = Field(n=n, kernel_len=k, field=root_field, device=self.device)
+        n, k, root_field = self.field.get_n(), self.field.get_k(), self.field.get_field()
+        search_field = Field(n=n, k=k, field=root_field, device=self.device)
 
         if self.reuse_tree and (self.search_tree is not None):
             root = self.search_tree
@@ -100,19 +100,19 @@ class MCTSZeroPlayer:
                 self.search_tree = None
 
     def action(self):
-        """ Returns (A, P, V, V_resign). """
+        """ Returns (A, Pi, V, V_resign, Proba). """
         self._run_search()
         N, n = self.search_tree.N, self.search_tree.n
 
         if (not self.deterministic_by_policy) and (self.field.get_depth() <= self.exploration_depth):
-            p = N ** (1 / self.temperature) / n ** (1 / self.temperature)
-            a = np.random.choice(np.arange(len(N)), p=p)
+            pi = N ** (1 / self.temperature) / n ** (1 / self.temperature)
+            a = np.random.choice(np.arange(len(N)), p=pi)
         else:
             a = np_rand_argmax(N)
-            p = np.zeros_like(N, dtype=np.float32)
-            p[a] = 1
+            pi = np.zeros_like(N, dtype=np.float32)
+            pi[a] = 1
 
-        p, v, v_resign = np.reshape(p, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
+        pi, v, v_resign = np.reshape(pi, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
         proba = np.reshape(self.search_tree.P, (self.n, self.n))
 
         self._make_move(*self.a2ij(a))
@@ -120,7 +120,7 @@ class MCTSZeroPlayer:
         if self.reuse_tree:
             self._truncate_tree(a)
 
-        return a, p, v, v_resign, proba
+        return a, pi, v, v_resign, proba
 
     def on_opponent_action(self, a: int):
         if self.reuse_tree:
@@ -137,7 +137,7 @@ class MCTSZeroPlayer:
 
 class NodeState:
     def __init__(self, parent, running_features, model, c_puct: float = 5, eps: float = None):
-        augm_fn, inv_augm_fn = get_dihedral_augm_fn(return_inverse=True)
+        augm_fn, inv_augm_fn = get_dihedral_augm_torch_fn(return_inverse=True)
         proba, value = model(augm_fn(running_features))
         proba = inv_augm_fn(proba)
 
@@ -169,7 +169,7 @@ class NodeState:
                 self.P *= (1 - eps)
                 self.P += eps * np.random.dirichlet(np.ones_like(self.P) * 0.02) * self.avail_moves
                 self.P /= self.P.sum()
-                
+
                 am = np.bool_(self.avail_moves)
                 self.U[am] *= self.P[am] / p_old[am]
 
@@ -197,8 +197,8 @@ class NodeState:
         self.Q[a] *= n_a / (n_a + 1.)
         self.Q[a] += value / (n_a + 1.)
 
-        self.U *= max(1., sqrt(n_sum)) / sqrt(n_sum + 1.)
-        self.U[a] *= (n_a + 2.) / (n_a + 1.)
+        self.U *= sqrt(n_sum + 1.) / max(1., sqrt(n_sum))
+        self.U[a] *= (n_a + 1.) / (n_a + 2.)
 
         self.N[a] += 1
         self.n += 1
