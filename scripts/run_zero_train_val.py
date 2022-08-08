@@ -22,6 +22,7 @@ def main():
     # ### CONFIG ###
     parser.add_argument('--exp_name', required=True, type=str)
     parser.add_argument('--device', required=False, type=str, default='cuda')
+    parser.add_argument('--preload_best', required=False, action='store_true', default=False)
 
     parser.add_argument('--n', required=False, type=int, default=10)
     parser.add_argument('--k', required=False, type=int, default=5)
@@ -41,17 +42,15 @@ def main():
     parser.add_argument('--lr_init', required=False, type=float, default=4e-4)
     parser.add_argument('--n_dec_steps', required=False, type=int, default=4)
 
-    parser.add_argument('--n_epochs', required=False, type=int, default=100)
-    parser.add_argument('--n_episodes', required=False, type=int, default=1000)
+    parser.add_argument('--n_epochs', required=False, type=int, default=200)
     parser.add_argument('--batch_size', required=False, type=int, default=128)
-    parser.add_argument('--n_last_epochs_train', required=False, type=int, default=10)
+    parser.add_argument('--n_last_epochs_train', required=False, type=int, default=8)
 
+    parser.add_argument('--augm', required=False, action='store_true', default=True)  # always True
     parser.add_argument('--shuffle_data', required=False, action='store_true', default=True)  # always True
 
-    parser.add_argument('--n_val_games', required=False, type=int, default=40)
+    parser.add_argument('--n_val_games', required=False, type=int, default=60)
     parser.add_argument('--val_vs_random', required=False, action='store_true', default=False)
-
-    parser.add_argument('--winrate_th', required=False, type=float, default=0.6)
 
     args = parser.parse_known_args()[0]
 
@@ -62,9 +61,11 @@ def main():
     exp_path = base_path / args.exp_name
     exp_path.mkdir(exist_ok=True)
 
-    save_json(config, exp_path / 'config_train.json')
+    n_agents = len([*exp_path.glob('log*')])
 
-    log_dir = exp_path / 'logs'
+    save_json(config, exp_path / f'config_train_{n_agents}.json')
+
+    log_dir = exp_path / f'logs_{n_agents}'
     log_dir.mkdir(exist_ok=True)
     logger = SummaryWriter(log_dir=log_dir)
 
@@ -86,10 +87,9 @@ def main():
                 for i in range(1, args.n_dec_steps + 1)}
 
     run_train_val(player, player_best, logger, exp_path, n_last_epochs_train=args.n_last_epochs_train,
-                  n_epochs=args.n_epochs, n_episodes=args.n_episodes, n_val_games=args.n_val_games,
-                  batch_size=args.batch_size, lr_init=args.lr_init, epoch2lr=epoch2lr,
-                  shuffle_data=args.shuffle_data,
-                  winrate_th=args.winrate_th, val_vs_random=args.val_vs_random)
+                  n_epochs=args.n_epochs, n_val_games=args.n_val_games, batch_size=args.batch_size,
+                  lr_init=args.lr_init, epoch2lr=epoch2lr, shuffle_data=args.shuffle_data, augm=args.augm,
+                  val_vs_random=args.val_vs_random, preload_best=args.preload_best)
 
 
 if __name__ == '__main__':

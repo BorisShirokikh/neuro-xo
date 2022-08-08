@@ -9,11 +9,12 @@ from torch.utils.tensorboard import SummaryWriter
 from dpipe.io import PathLike, save, load
 from dpipe.torch import to_var, save_model_state, load_model_state
 
+from neuroxo.im.augm import get_dihedral_augm_numpy_fn
 from neuroxo.players import MCTSZeroPlayer, PolicyPlayer
 from neuroxo.self_games import play_duel
 from neuroxo.torch.model import optimizer_step
 from neuroxo.torch.module.policy_net import RandomProbaPolicyNN
-from neuroxo.utils import flush, update_lr, s2hhmmss
+from neuroxo.utils import flush, update_lr, s2hhmmss, n2p_binomial_test
 
 
 # ### single node training ###
@@ -69,20 +70,10 @@ def run_episode(player: MCTSZeroPlayer, augm: bool = True):
     pi_history = [o[0][None, None] for o in o_history]
 
     if augm:
-        f_history_augm, pi_history_augm = [], []
         for i in range(len(z_history)):
-            f, pi = f_history[i], pi_history[i]
-            if np.random.rand() <= 0.75:
-                k = np.random.randint(low=1, high=4)
-                f = np.rot90(f, k=k, axes=(-2, -1))
-                pi = np.rot90(pi, k=k, axes=(-2, -1))
-            if np.random.rand() <= 0.5:
-                flip_axis = np.random.choice((-2, -1))
-                f = np.flip(f, axis=flip_axis)
-                pi = np.flip(pi, axis=flip_axis)
-            f_history_augm.append(f)
-            pi_history_augm.append(pi)
-        f_history, pi_history = f_history_augm, pi_history_augm
+            augm_fn = get_dihedral_augm_numpy_fn()
+            f_history[i] = augm_fn(f_history[i])
+            pi_history[i] = augm_fn(pi_history[i])
 
     return f_history, pi_history, z_history
 
@@ -233,50 +224,62 @@ def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
 
 
 def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-                  models_folder: str = 'models', data_folder: str = 'data_epoch', n_last_epochs_train: int = 10,
-                  n_epochs: int = 100, n_episodes: int = 1000, n_val_games: int = 40, batch_size: int = 128,
-                  lr_init: float = 4e-4, epoch2lr: dict = None, shuffle_data: bool = True,
-                  winrate_th: float = 0.6, val_vs_random: bool = False):
+                  models_folder: str = 'models', data_folder: str = 'data_epoch', n_last_epochs_train: int = 8,
+                  n_epochs: int = 100, n_val_games: int = 40, batch_size: int = 128, lr_init: float = 4e-4,
+                  epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True, val_vs_random: bool = False,
+                  preload_best: bool = False):
     exp_path = Path(exp_path)
     models_path = exp_path / models_folder
     models_path.mkdir(exist_ok=True)
 
-    init_or_load_best_model(player=player, models_path=models_path)
-    init_or_load_best_model(player=player_best, models_path=models_path)
+    if preload_best:
+        init_or_load_best_model(player=player, models_path=models_path)
 
     optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
 
+    winrate_th = n2p_binomial_test(n_val_games)
+
     logger_loss_step = 0
     for epoch in range(n_epochs):
-        flush(f'>>> Training on epoch {epoch}:')
-        # TODO: loading dataset
 
-        data_path = exp_path / f'{data_folder}_{epoch}'
-        data_path.mkdir(exist_ok=True)
-
-        n_data_instances = len([*data_path.glob('*')])
-
-        while n_data_instances < n_episodes:
-            flush(f'>>> >>> Found only {n_data_instances} / {n_episodes} training instances. Sleeping for 300s.')
-            time.sleep(300)
-            n_data_instances = len([*data_path.glob('*')])
-
-        f_epoch, pi_epoch, z_epoch = load_train_dataset(exp_path, epoch, n_last_epochs_train, data_folder)
-
+        # 1. Loading and training:
         flush(f'>>> Training NN on epoch {epoch}:')
+        data_epoch = model_path2model_idx(sorted(exp_path.glob(f'{data_folder}_*'), key=model_path2model_idx)[-1])
+        f_epoch, pi_epoch, z_epoch = load_train_dataset(exp_path, data_epoch, n_last_epochs_train, data_folder, augm)
+
         logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
                                  batch_size=batch_size, shuffle=shuffle_data)
 
-        flush(f'>>> Validating NN on epoch {epoch}:')
-        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
+        # 3. Validating and updating:
+        need_val = True
+        while need_val:
 
-        if winrate_vs_best >= winrate_th:
-            save_model_state(player.model, models_path / f'model_{epoch + 1}.pth')
-            load_model_state(player_best.model, models_path / f'model_{epoch + 1}.pth')
+            model_best_idx = init_or_load_best_model(player=player_best, models_path=models_path)
+            flush(f'>>> Validating NN on epoch {epoch} against model_{model_best_idx}:')
+
+            winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
+
+            if winrate_vs_best < winrate_th:
+                need_val = False  # break
+                flush(f'>>> The agent does not surpass model_{model_best_idx} '
+                      f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
+
+            if get_model_best_idx(models_path) == model_best_idx:
+                need_val = False  # break
+
+                if winrate_vs_best >= winrate_th:
+                    flush(f'>>> The agent does surpass model_{model_best_idx} '
+                          f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
+                    save_model_state(player.model, models_path / f'model_{model_best_idx + 1}.pth')
+                    load_model_state(player_best.model, models_path / f'model_{model_best_idx + 1}.pth')
 
         update_lr(optimizer, epoch2lr=epoch2lr, epoch=epoch)
 
         flush()
+
+
+def get_model_best_idx(models_path: PathLike):
+    return model_path2model_idx(sorted(models_path.glob('model*.pth'), key=model_path2model_idx)[-1])
 
 
 def model_path2model_idx(p: PathLike):
@@ -298,15 +301,20 @@ def init_or_load_best_model(player: MCTSZeroPlayer, models_path: PathLike, model
     return model_idx
 
 
-def load_train_dataset(exp_path: PathLike, epoch: int, n_last_epochs_train: int = 10, data_folder: str = 'data_epoch'):
+def load_train_dataset(exp_path: PathLike, data_epoch: int, n_last_epochs_train: int = 8,
+                       data_folder: str = 'data_epoch', augm: bool = True):
     f_epoch, pi_epoch, z_epoch = [], [], []
-    for e in range(max(0, epoch - n_last_epochs_train + 1), epoch + 1):
+    for e in range(max(0, data_epoch - n_last_epochs_train + 1), data_epoch + 1):
         data_path = exp_path / f'{data_folder}_{e}'
         for p in data_path.glob('episode_*'):
             try:
-                f_epoch.append(load(p / 'f.npy'))
-                pi_epoch.append(load(p / 'pi.npy'))
-                z_epoch.append(load(p / 'z.npy'))
+                f, pi, z = load(p / 'f.npy'), load(p / 'pi.npy'), load(p / 'z.npy')
+                if augm:
+                    augm_fn = get_dihedral_augm_numpy_fn()
+                    f, pi = augm_fn(f), augm_fn(pi)
+                f_epoch.append(f)
+                pi_epoch.append(pi)
+                z_epoch.append(z)
             except FileNotFoundError:  # for debug purposes: folder is created, but the data is not saved
                 pass
 

@@ -46,3 +46,7 @@ def s2hhmmss(s: float):
     mm = (s % 3600) // 60
     ss = s % 60
     return f'{hh:03d}:{mm:02d}:{ss:02d}'
+
+
+def n2p_binomial_test(n: int):
+    return 1.96 * np.sqrt(0.25 / n) + 0.5
