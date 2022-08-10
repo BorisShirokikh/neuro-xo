@@ -12,9 +12,9 @@ from neuroxo.utils import np_rand_argmax
 
 
 class MCTSZeroPlayer:
-    def __init__(self, model: NeuroXOZeroNN, field: Field, device: str = 'cpu',
-                 n_search_iter: int = 1600, c_puct: float = 5, eps: float = 0.25, exploration_depth: int = 12,
-                 temperature: float = 1., reuse_tree: bool = True, deterministic_by_policy: bool = False):
+    def __init__(self, model: NeuroXOZeroNN, field: Field, device: str = 'cpu', n_search_iter: int = 1600,
+                 c_puct: float = 5, eps: float = 0.25, exploration_depth: int = 12, temperature: float = 1.,
+                 reuse_tree: bool = True, deterministic_by_policy: bool = False, reduced_search: bool = True):
         self.model = to_device(model, device=device)
         self.field = field
         self.device = device
@@ -25,6 +25,7 @@ class MCTSZeroPlayer:
         self.exploration_depth = exploration_depth
         self.temperature = temperature
         self.deterministic_by_policy = deterministic_by_policy
+        self.reduced_search = reduced_search
 
         self.search_tree: Union[NodeState, None] = None
         self.reuse_tree = reuse_tree
@@ -59,7 +60,7 @@ class MCTSZeroPlayer:
         if self.reuse_tree and (self.search_tree is not None):
             root = self.search_tree
             root.set_exploration_proba(eps=self.eps)
-            n_start_iter = root.n
+            n_start_iter = root.n if self.reduced_search else 0
         else:
             root = NodeState(None, search_field.get_running_features(), self.model, c_puct=self.c_puct, eps=self.eps)
             n_start_iter = 0
@@ -114,13 +115,14 @@ class MCTSZeroPlayer:
 
         pi, v, v_resign = np.reshape(pi, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
         proba = np.reshape(self.search_tree.P, (self.n, self.n))
+        n_visits = np.reshape(self.search_tree.N, (self.n, self.n))
 
         self._make_move(*self.a2ij(a))
 
         if self.reuse_tree:
             self._truncate_tree(a)
 
-        return a, pi, v, v_resign, proba
+        return a, pi, v, v_resign, proba, n_visits
 
     def on_opponent_action(self, a: int):
         if self.reuse_tree:
