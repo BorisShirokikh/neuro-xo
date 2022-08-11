@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from neuroxo.torch.module.policy_net import ProbaPolicyNN
 from neuroxo.players import PolicyPlayer
 from neuroxo.environment.field import Field
-from neuroxo.train_algorithms.tree_backup import train_tree_backup
+from neuroxo.algorithms.tree_backup import train_tree_backup
 
 
 def main():

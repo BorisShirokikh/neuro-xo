@@ -7,7 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 from neuroxo.torch.module.zero_net import NeuroXOZeroNN
 from neuroxo.players import MCTSZeroPlayer
 from neuroxo.environment.field import Field
-from neuroxo.train_algorithms.zero import train_zero, overfit_zero
+from neuroxo.algorithms.zero import train_zero, overfit_zero
 
 
 def main():

@@ -54,7 +54,7 @@ def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summ
 def generate_train_dataset(player: MCTSZeroPlayer, n_episodes_per_epoch: int = 10000, augm: bool = True):
     player.eval()
     f_epoch, pi_epoch, z_epoch = [], [], []
-    for i in trange(n_episodes_per_epoch):
+    for _ in trange(n_episodes_per_epoch):
         f_episode, pi_episode, z_episode = run_episode(player=player, augm=augm)
         f_epoch += f_episode
         pi_epoch += pi_episode
@@ -173,28 +173,32 @@ def update_best_model(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, exp_p
 
 
 def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
-                       models_folder: str = 'models', data_folder: str = 'data_epoch',
+                       models_folder: str = 'models', data_folder: str = 'data',
                        n_epochs: int = 100, n_episodes: int = 1000, augm: bool = True):
     exp_path = Path(exp_path)
+
     models_path = exp_path / models_folder
     models_path.mkdir(exist_ok=True)
+
+    data_path = exp_path / data_folder
+    data_path.mkdir(exist_ok=True)
 
     model_idx = init_or_load_best_model(player=player_best, models_path=models_path)
 
     for epoch in range(n_epochs):
         flush(f'>>> Generating dataset on epoch {epoch}:')
 
-        data_path = exp_path / f'{data_folder}_{epoch}'
-        data_path.mkdir(exist_ok=True)
+        data_epoch_path = data_path / f'data_epoch_{epoch}'
+        data_epoch_path.mkdir(exist_ok=True)
 
-        n_data_instances = len([*data_path.glob('*')])
+        n_data_instances = len([*data_epoch_path.glob('*')])
 
         time_sum = 0
 
         while n_data_instances < n_episodes:
             time_start = time.perf_counter()
 
-            episode_path = data_path / f'episode_{np.random.randint(1e18)}'
+            episode_path = data_epoch_path / f'episode_{np.random.randint(1e18)}'
             if episode_path.exists():
                 continue
             else:
@@ -206,7 +210,7 @@ def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
             save(np.float32(np.concatenate(pi_episode, axis=0)), episode_path / 'pi.npy')
             save(np.int8(z_episode), episode_path / 'z.npy')
 
-            n_data_instances = len([*data_path.glob('*')])
+            n_data_instances = len([*data_epoch_path.glob('*')])
 
             time_finish = time.perf_counter()
 
@@ -224,13 +228,17 @@ def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
 
 
 def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-                  models_folder: str = 'models', data_folder: str = 'data_epoch', n_last_epochs_train: int = 8,
+                  models_folder: str = 'models', data_folder: str = 'data', n_data_epochs_train: int = 8,
                   n_epochs: int = 100, n_val_games: int = 40, batch_size: int = 128, lr_init: float = 4e-4,
                   epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True, val_vs_random: bool = False,
                   preload_best: bool = False):
     exp_path = Path(exp_path)
+
     models_path = exp_path / models_folder
     models_path.mkdir(exist_ok=True)
+
+    data_path = exp_path / data_folder
+    data_path.mkdir(exist_ok=True)
 
     if preload_best:
         init_or_load_best_model(player=player, models_path=models_path)
@@ -244,8 +252,7 @@ def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: S
 
         # 1. Loading and training:
         flush(f'>>> Training NN on epoch {epoch}:')
-        data_epoch = model_path2model_idx(sorted(exp_path.glob(f'{data_folder}_*'), key=model_path2model_idx)[-1])
-        f_epoch, pi_epoch, z_epoch = load_train_dataset(exp_path, data_epoch, n_last_epochs_train, data_folder, augm)
+        f_epoch, pi_epoch, z_epoch = load_train_dataset(data_path, n_data_epochs_train, augm)
 
         logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
                                  batch_size=batch_size, shuffle=shuffle_data)
@@ -261,14 +268,14 @@ def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: S
 
             if winrate_vs_best < winrate_th:
                 need_val = False  # break
-                flush(f'>>> The agent does not surpass model_{model_best_idx} '
+                flush(f'>>> The agent DOES NOT surpass model_{model_best_idx} '
                       f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
 
             if get_model_best_idx(models_path) == model_best_idx:
                 need_val = False  # break
 
                 if winrate_vs_best >= winrate_th:
-                    flush(f'>>> The agent does surpass model_{model_best_idx} '
+                    flush(f'>>> The agent DOES surpass model_{model_best_idx} '
                           f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
                     save_model_state(player.model, models_path / f'model_{model_best_idx + 1}.pth')
                     load_model_state(player_best.model, models_path / f'model_{model_best_idx + 1}.pth')
@@ -279,10 +286,14 @@ def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: S
 
 
 def get_model_best_idx(models_path: PathLike):
-    return model_path2model_idx(sorted(models_path.glob('model*.pth'), key=model_path2model_idx)[-1])
+    return path2idx(sorted(models_path.glob('model*.pth'), key=path2idx)[-1])
 
 
-def model_path2model_idx(p: PathLike):
+def get_last_data_epoch(data_path: PathLike):
+    return path2idx(sorted(data_path.glob('data_epoch_*'), key=path2idx)[-1])
+
+
+def path2idx(p: PathLike):
     return int(str(p.name).strip('.pth').split('_')[-1])
 
 
@@ -292,8 +303,8 @@ def init_or_load_best_model(player: MCTSZeroPlayer, models_path: PathLike, model
         save_model_state(player.model, models_path / f'model_{init_idx}.pth')
         return init_idx
 
-    model_best_path = sorted(model_paths, key=model_path2model_idx)[-1]
-    model_best_idx = model_path2model_idx(model_best_path)
+    model_best_path = sorted(model_paths, key=path2idx)[-1]
+    model_best_idx = path2idx(model_best_path)
 
     if model_idx < model_best_idx:
         load_model_state(player.model, model_best_path)
@@ -301,12 +312,12 @@ def init_or_load_best_model(player: MCTSZeroPlayer, models_path: PathLike, model
     return model_idx
 
 
-def load_train_dataset(exp_path: PathLike, data_epoch: int, n_last_epochs_train: int = 8,
-                       data_folder: str = 'data_epoch', augm: bool = True):
+def load_train_dataset(data_path: PathLike, n_last_epochs_train: int = 8, augm: bool = True):
+    data_epoch = get_last_data_epoch(data_path)
     f_epoch, pi_epoch, z_epoch = [], [], []
     for e in range(max(0, data_epoch - n_last_epochs_train + 1), data_epoch + 1):
-        data_path = exp_path / f'{data_folder}_{e}'
-        for p in data_path.glob('episode_*'):
+        data_epoch_path = data_path / f'data_epoch_{e}'
+        for p in data_epoch_path.glob('episode_*'):
             try:
                 f, pi, z = load(p / 'f.npy'), load(p / 'pi.npy'), load(p / 'z.npy')
                 if augm:
@@ -315,7 +326,7 @@ def load_train_dataset(exp_path: PathLike, data_epoch: int, n_last_epochs_train:
                 f_epoch.append(f)
                 pi_epoch.append(pi)
                 z_epoch.append(z)
-            except FileNotFoundError:  # for debug purposes: folder is created, but the data is not saved
+            except FileNotFoundError:  # folder is created, but the data is not saved
                 pass
 
     f_epoch = np.concatenate(f_epoch, axis=0)

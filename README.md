@@ -7,7 +7,7 @@ Code for the final project within the Reinforcement Learning 2021 course at Skol
 </div>
 
 ## Contribution
-- [n-step off-Policy Tree Backup](neuroxo/train_algorithms/off_policy_tree_backup.py), [n-step Q(σ)-learinig](neuroxo/train_algorithms/q_learning.py) [[1]](#1)
+- [n-step off-Policy Tree Backup](neuroxo/algorithms/off_policy_tree_backup.py), [n-step Q(σ)-learinig](neuroxo/algorithms/q_learning.py) [[1]](#1)
 - [Monte-Carlo Tree Search](https://github.com/BorisShirokikh/RL2021_Final_Project/blob/main/ttt_lib/monte_carlo_tree_search.py) [[2]](#2)
 
 

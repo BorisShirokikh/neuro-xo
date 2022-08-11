@@ -11,7 +11,7 @@ from neuroxo.self_games import play_duel
 from neuroxo.torch.module.zero_net import NeuroXOZeroNN
 from neuroxo.players import MCTSZeroPlayer
 from neuroxo.environment.field import Field
-from neuroxo.train_algorithms.zero import get_model_best_idx
+from neuroxo.algorithms.zero import get_model_best_idx
 from neuroxo.utils import flush
 
 
@@ -53,7 +53,8 @@ def main():
     reduced_search = not args.full_search
     # ### ###### ###
 
-    os.makedirs(base_path / exp_name / vis_name, exist_ok=True)
+    vis_path = base_path / exp_name / 'vis' / vis_name
+    os.makedirs(vis_path, exist_ok=True)
 
     field = Field(n=10, k=5, device=device)
     model = NeuroXOZeroNN(n=10, in_channels=2, n_blocks=n_blocks, n_features=n_features)
@@ -80,13 +81,11 @@ def main():
         proba_history.append(o[3])
         n_history.append(o[4])
 
-    save(np.array(s_history), base_path / exp_name / vis_name / 's.npy')
-    save(np.array(a_history), base_path / exp_name / vis_name / 'a.npy')
-    save(np.array(pi_history), base_path / exp_name / vis_name / 'pi.npy')
-    save(np.array(v_history), base_path / exp_name / vis_name / 'v.npy')
-    save(np.array(v_resign_history), base_path / exp_name / vis_name / 'v_resign.npy')
-    save(np.array(proba_history), base_path / exp_name / vis_name / 'p.npy')
-    save(np.array(n_history), base_path / exp_name / vis_name / 'n.npy')
+    for arr, arr_name in zip(
+        (s_history, a_history, pi_history, v_history, v_resign_history, proba_history, n_history),
+        ('s', 'a', 'pi', 'v', 'v_resign', 'p', 'n')
+    ):
+        save(np.array(arr), vis_path / f'{arr_name}.npy')
 
 
 if __name__ == '__main__':
