@@ -12,7 +12,7 @@ from gui.board import Board
 from neuroxo.environment.field import Field, O_ID, X_ID
 from neuroxo.players import MCTSZeroPlayer
 from neuroxo.torch.module.zero_net import NeuroXOZeroNN
-from neuroxo.utils import get_repo_root, flush
+from neuroxo.utils import get_repo_root, flush, np_rand_argmax
 
 
 def terminate():
@@ -26,6 +26,7 @@ if __name__ == '__main__':
     pygame.display.set_caption("Tic-Tac-Toe 10x10")
 
     # ### load agent ###
+    # TODO: support other algorithms...
     agent_name = 'zero_v0'
     agent_path = get_repo_root() / 'agents' / agent_name
 
@@ -75,20 +76,24 @@ if __name__ == '__main__':
     board = Board(screen, n, 50 * n, frame_thickness)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--mode', type=str, required=True, choices=['single', 'pvp'])
+    parser.add_argument('-m', '--mode', type=str, required=False, choices=['single', 'pvp'], default='single')
+    parser.add_argument('-v', '--verbose', required=False, action='store_true', default=False)
     args = parser.parse_args()
 
     while True:
         for event in pygame.event.get():
             if not game_over:
+
                 if args.mode == 'single' and player.field.get_action_id() == player_2:
+
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_WAIT))
                     a, *out = player.action()
-                    flush(f'>>> Estimated position value: {out[2]:.2f}')
+                    flush(f'>>> [neuro-xo]: Estimated position value = {out[2]:.2f}')
+                    flush(f'\n>>> [neuro-xo]: Move: row {player.a2ij(a)[0] + 1}, col {player.a2ij(a)[1] + 1}.')
                     v = player.field.get_value()
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_ARROW))
 
-                    clicked_row, clicked_col = a // n, a % n
+                    clicked_row, clicked_col = player.a2ij(a)
                     move = clicked_row, clicked_col
 
                     board.field = player.field.get_field()
@@ -101,6 +106,12 @@ if __name__ == '__main__':
 
                     prev_move = move
                     cur_player = player.field.get_action_id()
+
+                    if args.verbose:
+                        tree = player.search_tree
+                        suggested_row, suggested_col = player.a2ij(np_rand_argmax(player.search_tree.N))
+                        flush(f'>>> [neuro-xo]: Estimated player`s position value = {player.search_tree.value:.2f}. '
+                              f'Suggested move: row {suggested_row + 1}, col {suggested_col + 1}.\n')
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     mouseX = event.pos[0]
@@ -117,6 +128,7 @@ if __name__ == '__main__':
                         v = player.field.get_value()
                         if args.mode == 'single':
                             player.on_opponent_action(a)
+                            flush(f'\n>>> [player]: Move: row {clicked_row + 1}, col {clicked_col + 1}')
 
                         board.field = player.field.get_field()
 

@@ -101,7 +101,7 @@ class Field:
         for d in DIRECTIONS:
             by_d = self._check_kernels[d](t) >= self._k
             if torch.any(by_d):
-                return True if (not return_how) else (True, 'row', _get_win_center(by_d, d, self._k))
+                return True if (not return_how) else (True, d, _get_win_center(by_d, d, self._k))
 
         return (False, None, None) if return_how else False
 
