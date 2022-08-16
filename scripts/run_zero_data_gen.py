@@ -41,8 +41,6 @@ def main():
     parser.add_argument('--n_epochs', required=False, type=int, default=200)
     parser.add_argument('--n_episodes', required=False, type=int, default=1000)
 
-    parser.add_argument('--augm', required=False, action='store_true', default=True)  # always True
-
     args = parser.parse_known_args()[0]
 
     config = vars(args)
@@ -55,7 +53,9 @@ def main():
     configs_path = exp_path / 'configs'
     configs_path.mkdir(exist_ok=True)
 
-    save_json(config, configs_path / 'config_data_gen.json')
+    n_data_gens = len([*configs_path.glob('config_data_gen*')])
+
+    save_json(config, configs_path / f'config_data_gen_{n_data_gens}.json')
 
     model_best = NeuroXOZeroNN(args.n, in_channels=args.in_channels, n_blocks=args.n_blocks, n_features=args.n_features)
     field = Field(args.n, k=args.k, field=None, device=args.device)
@@ -65,7 +65,7 @@ def main():
                                  deterministic_by_policy=args.deterministic_by_policy,
                                  reduced_search=args.reduced_search)
 
-    run_data_generator(player_best, exp_path, n_epochs=args.n_epochs, n_episodes=args.n_episodes, augm=args.augm)
+    run_data_generator(player_best, exp_path, n_epochs=args.n_epochs, n_episodes=args.n_episodes)
 
 
 if __name__ == '__main__':

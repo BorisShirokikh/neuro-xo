@@ -5,8 +5,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-import neuroxo
-
 
 def get_random_field(n=10, min_depth=0, max_depth=10):
     idxs = np.random.permutation(np.arange(n * n))
@@ -21,6 +19,7 @@ def get_random_field(n=10, min_depth=0, max_depth=10):
 
 
 def get_repo_root():
+    import neuroxo
     return Path(neuroxo.__file__).parent.parent
 
 

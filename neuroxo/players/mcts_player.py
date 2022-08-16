@@ -101,7 +101,7 @@ class MCTSZeroPlayer:
                 self.search_tree = None
 
     def action(self):
-        """ Returns (A, Pi, V, V_resign, Proba). """
+        """ Returns (A, Pi, V, V_resign, Proba, N_visits). """
         self._run_search()
         N, n = self.search_tree.N, self.search_tree.n
 
@@ -118,7 +118,6 @@ class MCTSZeroPlayer:
         n_visits = np.reshape(self.search_tree.N, (self.n, self.n))
 
         self._make_move(*self.a2ij(a))
-
         if self.reuse_tree:
             self._truncate_tree(a)
 

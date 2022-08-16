@@ -10,10 +10,9 @@ from dpipe.io import PathLike, save, load
 from dpipe.torch import to_var, save_model_state, load_model_state
 
 from neuroxo.im.augm import get_dihedral_augm_numpy_fn
-from neuroxo.players import MCTSZeroPlayer, PolicyPlayer
+from neuroxo.players import MCTSZeroPlayer
 from neuroxo.self_games import play_duel
 from neuroxo.torch.model import optimizer_step
-from neuroxo.torch.module.policy_net import RandomProbaPolicyNN
 from neuroxo.utils import flush, update_lr, s2hhmmss, n2p_binomial_test
 
 
@@ -118,7 +117,7 @@ def train(player: MCTSZeroPlayer, optimizer: torch.optim.Optimizer, logger: Summ
 
 
 def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, epoch: int,
-             n_val_games: int = 400, val_vs_random: bool = False):
+             n_val_games: int = 100):
     deterministic_by_policy = player.deterministic_by_policy
     deterministic_by_policy_best = player_best.deterministic_by_policy
     player.deterministic_by_policy = True
@@ -138,19 +137,6 @@ def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summar
                          for _ in trange(n_val_games // 2)])
     winrate_vs_best = np.mean(np.concatenate((stats_xo, -stats_ox)) == 1)
     logger.add_scalar('winrate/vs_best', winrate_vs_best, epoch)
-
-    if val_vs_random:
-        player_random = PolicyPlayer(model=RandomProbaPolicyNN(n=player.n, in_channels=player.model.in_channels),
-                                     field=player.field, eps=1., device=player.device)
-        player_random.eval()
-
-        stats_xo = np.array([play_duel(player, player_random, return_result_only=True)
-                             for _ in trange(n_val_games // 2)])
-        stats_ox = np.array([play_duel(player_random, player, return_result_only=True)
-                             for _ in trange(n_val_games // 2)])
-        logger.add_scalar('winrate/vs_random', np.mean(np.concatenate((stats_xo, -stats_ox)) == 1), epoch)
-
-        del player_random
 
     player.deterministic_by_policy = deterministic_by_policy
     player_best.deterministic_by_policy = deterministic_by_policy_best
@@ -172,9 +158,8 @@ def update_best_model(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, exp_p
 # ### multiple nodes training ###
 
 
-def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
-                       models_folder: str = 'models', data_folder: str = 'data',
-                       n_epochs: int = 100, n_episodes: int = 1000, augm: bool = True):
+def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike, models_folder: str = 'models',
+                       data_folder: str = 'data', n_epochs: int = 100, n_episodes: int = 1000):
     exp_path = Path(exp_path)
 
     models_path = exp_path / models_folder
@@ -201,11 +186,10 @@ def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
             episode_path = data_epoch_path / f'episode_{np.random.randint(1e18)}'
             if episode_path.exists():
                 continue
-            else:
-                episode_path.mkdir(exist_ok=True)
 
-            f_episode, pi_episode, z_episode = run_episode(player=player_best, augm=augm)
+            f_episode, pi_episode, z_episode = run_episode(player=player_best, augm=False)
 
+            episode_path.mkdir(exist_ok=True)
             save(np.int8(np.concatenate(f_episode, axis=0)), episode_path / 'f.npy')
             save(np.float32(np.concatenate(pi_episode, axis=0)), episode_path / 'pi.npy')
             save(np.int8(z_episode), episode_path / 'z.npy')
@@ -220,7 +204,7 @@ def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
             time_total_est = time_delta_est * n_episodes
 
             flush(f'>>> {n_data_instances}/{n_episodes} '
-                  f'[{s2hhmmss(time_sum)}<{s2hhmmss(time_total_est - time_sum)},  {time_delta:.2f}s/it]')
+                  f'[{s2hhmmss(time_sum)}<{s2hhmmss(time_total_est - time_sum)},  {time_delta_est:.2f}s/it]')
 
             model_idx = init_or_load_best_model(player=player_best, models_path=models_path, model_idx=model_idx)
 
@@ -228,10 +212,9 @@ def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike,
 
 
 def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-                  models_folder: str = 'models', data_folder: str = 'data', n_data_epochs_train: int = 8,
-                  n_epochs: int = 100, n_val_games: int = 40, batch_size: int = 128, lr_init: float = 4e-4,
-                  epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True, val_vs_random: bool = False,
-                  preload_best: bool = False):
+                  models_folder: str = 'models', data_folder: str = 'data', n_data_epochs_train: int = 32,
+                  n_epochs: int = 200, n_val_games: int = 100, batch_size: int = 512, lr_init: float = 1e-2,
+                  epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True, preload_best: bool = True):
     exp_path = Path(exp_path)
 
     models_path = exp_path / models_folder
@@ -252,7 +235,9 @@ def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: S
 
         # 1. Loading and training:
         flush(f'>>> Training NN on epoch {epoch}:')
-        f_epoch, pi_epoch, z_epoch = load_train_dataset(data_path, n_data_epochs_train, augm)
+        data_epoch = None if (get_last_data_epoch(data_path) < (n_data_epochs_train + epoch)) else \
+            (n_data_epochs_train + epoch)
+        f_epoch, pi_epoch, z_epoch = load_train_dataset(data_path, n_data_epochs_train, augm, data_epoch=data_epoch)
 
         logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
                                  batch_size=batch_size, shuffle=shuffle_data)
@@ -264,7 +249,7 @@ def run_train_val(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: S
             model_best_idx = init_or_load_best_model(player=player_best, models_path=models_path)
             flush(f'>>> Validating NN on epoch {epoch} against model_{model_best_idx}:')
 
-            winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
+            winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games)
 
             if winrate_vs_best < winrate_th:
                 need_val = False  # break
@@ -312,8 +297,11 @@ def init_or_load_best_model(player: MCTSZeroPlayer, models_path: PathLike, model
     return model_idx
 
 
-def load_train_dataset(data_path: PathLike, n_last_epochs_train: int = 8, augm: bool = True):
-    data_epoch = get_last_data_epoch(data_path)
+def load_train_dataset(data_path: PathLike, n_last_epochs_train: int = 8, augm: bool = True, data_epoch: int = None):
+    data_path = Path(data_path)
+    if data_epoch is None:
+        data_epoch = get_last_data_epoch(data_path)
+
     f_epoch, pi_epoch, z_epoch = [], [], []
     for e in range(max(0, data_epoch - n_last_epochs_train + 1), data_epoch + 1):
         data_epoch_path = data_path / f'data_epoch_{e}'
@@ -334,3 +322,55 @@ def load_train_dataset(data_path: PathLike, n_last_epochs_train: int = 8, augm: 
     z_epoch = np.concatenate(z_epoch, axis=0)
 
     return np.float32(f_epoch), np.float32(pi_epoch), np.float32(z_epoch)
+
+
+# ### overfit: ###
+
+
+def run_overfit(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
+                models_folder: str = 'models', data_folder: str = 'data', n_data_epochs_train: int = 8,
+                n_epochs: int = 20, n_val_games: int = 100, batch_size: int = 128, lr_init: float = 4e-4,
+                epoch2lr: dict = None, moving: bool = False):
+    exp_path = Path(exp_path)
+
+    models_path = exp_path / models_folder
+    models_path.mkdir(exist_ok=True)
+
+    data_path = exp_path / data_folder
+    data_path.mkdir(exist_ok=True)
+
+    init_or_load_best_model(player=player, models_path=models_path)
+
+    optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
+
+    winrate_th = n2p_binomial_test(n_val_games)
+
+    logger_loss_step = 0
+    for epoch in range(n_data_epochs_train, n_data_epochs_train + n_epochs):
+
+        # 1. Loading and training:
+        flush(f'>>> Training NN on epoch {epoch}:')
+        f_epoch, pi_epoch, z_epoch = load_train_dataset(data_path, n_data_epochs_train,
+                                                        data_epoch=epoch if moving else n_data_epochs_train)
+
+        logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
+                                 batch_size=batch_size)
+
+        # 3. Validating and updating:
+
+        model_best_idx = init_or_load_best_model(player=player_best, models_path=models_path)
+        flush(f'>>> Validating NN on epoch {epoch} against model_{model_best_idx}:')
+
+        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games)
+
+        if winrate_vs_best < winrate_th:
+            flush(f'>>> The agent DOES NOT surpass model_{model_best_idx} '
+                  f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
+
+        else:
+            flush(f'>>> The agent DOES surpass model_{model_best_idx} '
+                  f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
+
+        update_lr(optimizer, epoch2lr=epoch2lr, epoch=epoch)
+
+        flush()

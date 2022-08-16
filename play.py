@@ -89,7 +89,7 @@ if __name__ == '__main__':
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_WAIT))
                     a, *out = player.action()
                     flush(f'>>> [neuro-xo]: Estimated position value = {out[2]:.2f}')
-                    flush(f'\n>>> [neuro-xo]: Move: row {player.a2ij(a)[0] + 1}, col {player.a2ij(a)[1] + 1}.')
+                    flush(f'>>> [neuro-xo]: Move: row {player.a2ij(a)[0] + 1}, col {player.a2ij(a)[1] + 1}.')
                     v = player.field.get_value()
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_ARROW))
 
@@ -111,7 +111,7 @@ if __name__ == '__main__':
                         tree = player.search_tree
                         suggested_row, suggested_col = player.a2ij(np_rand_argmax(player.search_tree.N))
                         flush(f'>>> [neuro-xo]: Estimated player`s position value = {player.search_tree.value:.2f}. '
-                              f'Suggested move: row {suggested_row + 1}, col {suggested_col + 1}.\n')
+                              f'Suggested move: row {suggested_row + 1}, col {suggested_col + 1}.')
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     mouseX = event.pos[0]
@@ -128,7 +128,7 @@ if __name__ == '__main__':
                         v = player.field.get_value()
                         if args.mode == 'single':
                             player.on_opponent_action(a)
-                            flush(f'\n>>> [player]: Move: row {clicked_row + 1}, col {clicked_col + 1}')
+                            flush(f'>>> [player]: Move: row {clicked_row + 1}, col {clicked_col + 1}')
 
                         board.field = player.field.get_field()
 
