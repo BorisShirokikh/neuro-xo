@@ -1,41 +1,49 @@
 # RL for Tic-Tac-Toe 10x10
 
-Code for the final project within the Reinforcement Learning 2021 course at Skoltech.
+Code for the extended version of Tic-Tac-Toe game:
+10x10 board, winner should place 5 "x" or "o" in a row/column/any diagonal.
+
+We implement an RL agent trained via AlphaZero algorithm [[1]](#1).
 
 <div align="center">
-<img src="https://user-images.githubusercontent.com/25771270/139085627-17feb7e2-e747-4b54-a927-384fe15af2f9.gif" width="250">
+<img src="https://user-images.githubusercontent.com/9141666/202870740-6a9181f8-e1bb-48af-9d8b-2f1fb21c6997.gif" width="400">
 </div>
-
-## Contribution
-- [n-step off-Policy Tree Backup](neuroxo/algorithms/off_policy_tree_backup.py), [n-step Q(σ)-learinig](neuroxo/algorithms/q_learning.py) [[1]](#1)
-- [Monte-Carlo Tree Search](https://github.com/BorisShirokikh/RL2021_Final_Project/blob/main/ttt_lib/monte_carlo_tree_search.py) [[2]](#2)
 
 
 ## Repository Structure
 ```
-├── models                  # pre-trained agents to play with
+├── agents                      # pre-trained agents to play with
 │   └── ...
-├── notebooks               # experiment results evaluation
-│   └── ...
-├── scripts
-│   ├── q_learn_*x*.py      # dfferent field size model training
-│   └── q_play_10x10.py     # manual playing against the pre-trained model
 │
-└── ttt_lib                 # project's library
-    └── ...
+├── assets                      # images used in gui
+│   └── ...
+│
+├── gui                         # classes to draw the game board
+│   └── ...
+│
+├── neuroxo                     # project's library
+│   └── ...
+│
+├── notebooks                   # some experimental visualization
+│   └── ...
+│
+├── scripts
+│   ├── run_zero_data_gen.py    # 1st part of training: continuously generate new data using the best model
+│   └── run_zero_train_val.py   # 2nd part of training: trains the current model using generated data, runs validation against the best model
+│
+└── play.py                     # Our "main" function. Here, you can play against the RL agent or simply enjoy multiplayer.
 ```
+
 
 ## Installation
 Execute from the directory you want the repo to be installed:
 
 ```
-git clone https://github.com/BorisShirokikh/RL2021_Final_Project/
-cd RL2021_Final_Project
+git clone git@github.com:BorisShirokikh/neuro-xo.git
+cd neuro-xo
 pip install -e .
 ```
 
 
 ## References
-<a id="1">[1]</a> Sutton R. S., Barto A. G. Reinforcement learning: An introduction. – MIT press, 2018.
-
-<a id="2">[2]</a> Silver D. et al. Mastering the game of Go with deep neural networks and tree search //nature. – 2016. – Т. 529. – №. 7587. – С. 484-489.
+<a id="1">[1]</a> Silver, David, et al. "Mastering the game of go without human knowledge." nature 550.7676 (2017): 354-359.
