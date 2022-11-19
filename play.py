@@ -12,7 +12,7 @@ from gui.board import Board
 from neuroxo.environment.field import Field, O_ID, X_ID
 from neuroxo.players import MCTSZeroPlayer
 from neuroxo.torch.module.zero_net import NeuroXOZeroNN
-from neuroxo.utils import get_repo_root, flush, np_rand_argmax
+from neuroxo.utils import get_repo_root, flush
 
 
 def terminate():
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     pygame.display.set_caption("Tic-Tac-Toe 10x10")
 
     # ### load agent ###
-    # TODO: support other algorithms...
+    # TODO: load model from cloud
     agent_name = 'zero_v0'
     agent_path = get_repo_root() / 'agents' / agent_name
 
@@ -76,15 +76,15 @@ if __name__ == '__main__':
     board = Board(screen, n, 50 * n, frame_thickness)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-m', '--mode', type=str, required=False, choices=['single', 'pvp'], default='single')
-    parser.add_argument('-v', '--verbose', required=False, action='store_true', default=False)
+    parser.add_argument('-m', '--mode', type=str, required=False, choices=['single', 'multi', 'observer'],
+                        default='single')
     args = parser.parse_args()
 
     while True:
         for event in pygame.event.get():
             if not game_over:
 
-                if args.mode == 'single' and player.field.get_action_id() == player_2:
+                if (args.mode == 'single' and player.field.get_action_id() == player_2) or (args.mode == 'observer'):
 
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_WAIT))
                     a, *out = player.action()
@@ -106,12 +106,6 @@ if __name__ == '__main__':
 
                     prev_move = move
                     cur_player = player.field.get_action_id()
-
-                    if args.verbose:
-                        tree = player.search_tree
-                        suggested_row, suggested_col = player.a2ij(np_rand_argmax(player.search_tree.N))
-                        flush(f'>>> [neuro-xo]: Estimated player`s position value = {player.search_tree.value:.2f}. '
-                              f'Suggested move: row {suggested_row + 1}, col {suggested_col + 1}.')
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     mouseX = event.pos[0]

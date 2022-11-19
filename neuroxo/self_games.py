@@ -1,11 +1,8 @@
-from typing import Union
-
 from neuroxo.environment.field import X_ID, Field
-from neuroxo.players import PolicyPlayer, MCTSZeroPlayer
+from neuroxo.players import MCTSZeroPlayer
 
 
-def play_duel(player_x: Union[PolicyPlayer, MCTSZeroPlayer],
-              player_o: Union[PolicyPlayer, MCTSZeroPlayer],
+def play_duel(player_x: MCTSZeroPlayer, player_o: MCTSZeroPlayer,
               return_result_only: bool = False, self_game: bool = False):
     field = Field(n=player_x.n, k=player_x.field.get_k(), field=None, device=player_x.device)
     player_x.set_field(field=field)

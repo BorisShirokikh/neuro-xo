@@ -16,51 +16,6 @@ from neuroxo.torch.model import optimizer_step
 from neuroxo.utils import flush, update_lr, s2hhmmss, n2p_binomial_test
 
 
-# ### single node training ###
-
-
-def train_zero(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-               n_epochs: int = 100, n_episodes: int = 10000, n_val_games: int = 20, batch_size: int = 256,
-               lr_init: float = 4e-3, epoch2lr: dict = None, augm: bool = True, shuffle_data: bool = True,
-               best_model_name: str = 'model', winrate_th: float = 0.6, val_vs_random: bool = False):
-    exp_path = Path(exp_path)
-    best_model_path = exp_path / f'{best_model_name}.pth'
-    if not best_model_path.exists():
-        save_model_state(player_best.model, best_model_path)
-
-    optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
-
-    logger_loss_step = 0
-    for epoch in range(n_epochs):
-
-        flush(f'>>> Generating dataset on epoch {epoch}:')
-        f_epoch, pi_epoch, z_epoch = generate_train_dataset(player_best, n_episodes, augm=augm)
-
-        flush(f'>>> Training NN on epoch {epoch}:')
-        logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
-                                 batch_size=batch_size, shuffle=shuffle_data)
-
-        flush(f'>>> Validating NN on epoch {epoch}:')
-        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games, val_vs_random=val_vs_random)
-
-        update_best_model(player, player_best, exp_path, epoch, winrate_vs_best, winrate_th, best_model_name)
-
-        update_lr(optimizer, epoch2lr=epoch2lr, epoch=epoch)
-
-        flush()
-
-
-def generate_train_dataset(player: MCTSZeroPlayer, n_episodes_per_epoch: int = 10000, augm: bool = True):
-    player.eval()
-    f_epoch, pi_epoch, z_epoch = [], [], []
-    for _ in trange(n_episodes_per_epoch):
-        f_episode, pi_episode, z_episode = run_episode(player=player, augm=augm)
-        f_epoch += f_episode
-        pi_epoch += pi_episode
-        z_epoch += z_episode
-    return f_epoch, pi_epoch, z_epoch
-
-
 def run_episode(player: MCTSZeroPlayer, augm: bool = True):
     _, f_history, _, o_history, winner = play_duel(player, player, self_game=True)
     value = winner ** 2
@@ -145,17 +100,6 @@ def validate(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: Summar
     player_best.eps = eps_best
 
     return winrate_vs_best
-
-
-def update_best_model(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, exp_path: PathLike, epoch: int,
-                      winrate_vs_best: float, winrate_th: float = 0.55, best_model_name: str = 'model'):
-    if winrate_vs_best >= winrate_th:
-        save_model_state(player_best.model, exp_path / f'{best_model_name}_{epoch}.pth')
-        save_model_state(player.model, exp_path / f'{best_model_name}.pth')
-        load_model_state(player_best.model, exp_path / f'{best_model_name}.pth')
-
-
-# ### multiple nodes training ###
 
 
 def run_data_generator(player_best: MCTSZeroPlayer, exp_path: PathLike, models_folder: str = 'models',
@@ -322,55 +266,3 @@ def load_train_dataset(data_path: PathLike, n_last_epochs_train: int = 8, augm: 
     z_epoch = np.concatenate(z_epoch, axis=0)
 
     return np.float32(f_epoch), np.float32(pi_epoch), np.float32(z_epoch)
-
-
-# ### overfit: ###
-
-
-def run_overfit(player: MCTSZeroPlayer, player_best: MCTSZeroPlayer, logger: SummaryWriter, exp_path: PathLike,
-                models_folder: str = 'models', data_folder: str = 'data', n_data_epochs_train: int = 8,
-                n_epochs: int = 20, n_val_games: int = 100, batch_size: int = 128, lr_init: float = 4e-4,
-                epoch2lr: dict = None, moving: bool = False):
-    exp_path = Path(exp_path)
-
-    models_path = exp_path / models_folder
-    models_path.mkdir(exist_ok=True)
-
-    data_path = exp_path / data_folder
-    data_path.mkdir(exist_ok=True)
-
-    init_or_load_best_model(player=player, models_path=models_path)
-
-    optimizer = SGD(player.model.parameters(), lr=lr_init, momentum=0.9, weight_decay=1e-4, nesterov=True)
-
-    winrate_th = n2p_binomial_test(n_val_games)
-
-    logger_loss_step = 0
-    for epoch in range(n_data_epochs_train, n_data_epochs_train + n_epochs):
-
-        # 1. Loading and training:
-        flush(f'>>> Training NN on epoch {epoch}:')
-        f_epoch, pi_epoch, z_epoch = load_train_dataset(data_path, n_data_epochs_train,
-                                                        data_epoch=epoch if moving else n_data_epochs_train)
-
-        logger_loss_step = train(player, optimizer, logger, logger_loss_step, f_epoch, pi_epoch, z_epoch,
-                                 batch_size=batch_size)
-
-        # 3. Validating and updating:
-
-        model_best_idx = init_or_load_best_model(player=player_best, models_path=models_path)
-        flush(f'>>> Validating NN on epoch {epoch} against model_{model_best_idx}:')
-
-        winrate_vs_best = validate(player, player_best, logger, epoch, n_val_games)
-
-        if winrate_vs_best < winrate_th:
-            flush(f'>>> The agent DOES NOT surpass model_{model_best_idx} '
-                  f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
-
-        else:
-            flush(f'>>> The agent DOES surpass model_{model_best_idx} '
-                  f'with winrate {winrate_vs_best:.3f} (threshold is {winrate_th:.3f})')
-
-        update_lr(optimizer, epoch2lr=epoch2lr, epoch=epoch)
-
-        flush()
