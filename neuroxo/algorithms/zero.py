@@ -253,6 +253,7 @@ def load_train_dataset(data_path: PathLike, n_last_epochs_train: int = 8, augm: 
             try:
                 f, pi, z = load(p / 'f.npy'), load(p / 'pi.npy'), load(p / 'z.npy')
                 if augm:
+                    # TODO: we can create 8 instances of all augmentations instead of just one random
                     augm_fn = get_dihedral_augm_numpy_fn()
                     f, pi = augm_fn(f), augm_fn(pi)
                 f_epoch.append(f)

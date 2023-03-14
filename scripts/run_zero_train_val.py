@@ -11,15 +11,11 @@ from neuroxo.algorithms.zero import run_train_val
 
 
 def main():
-    base_path = choose_existing(
-        Path('/home/boris/Desktop/workspace/experiments/rl/zero/'),
-        Path('/shared/experiments/rl/ttt_10x10/'),
-        Path('/gpfs/gpfs0/b.shirokikh/experiments/rl/ttt_10x10/'),
-    )
 
     parser = argparse.ArgumentParser()
 
     # ### CONFIG ###
+
     parser.add_argument('--exp_name', required=True, type=str)
     parser.add_argument('--device', required=False, type=str, default='cuda')
     parser.add_argument('--preload_best', required=False, action='store_true', default=False)
@@ -57,9 +53,18 @@ def main():
 
     config = vars(args)
     config['in_channels'] = 2  # FIXME: should depend on feature generator
+
     # ### ###### ###
 
     # ### paths ###
+    base_path = choose_existing(
+        Path('/home/boris/Desktop/workspace/experiments/rl/'),
+        Path('/shared/experiments/rl/'),
+        Path('/gpfs/gpfs0/b.shirokikh/experiments/rl/'),
+    )
+    base_path /= f'ttt_{args.n}x{args.n}'
+    base_path.mkdir(exist_ok=True)
+
     exp_path = base_path / args.exp_name
     exp_path.mkdir(exist_ok=True)
 
