@@ -1,14 +1,15 @@
 from math import sqrt
 from typing import Union
 
+import numba as nb
 import numpy as np
 from dpipe.torch import to_device, to_np
 
 from neuroxo.environment import Field
 from neuroxo.im.augm import get_dihedral_augm_torch_fn
+from neuroxo.numba.random import choose_idx, rand_argmax
 from neuroxo.torch.module.zero_net import NeuroXOZeroNN
 from neuroxo.torch.utils import get_available_moves
-from neuroxo.utils import np_rand_argmax
 
 
 class MCTSZeroPlayer:
@@ -30,7 +31,6 @@ class MCTSZeroPlayer:
         self.search_tree: Union[NodeState, None] = None
         self.reuse_tree = reuse_tree
 
-        # fields to slightly speedup computation:
         self.n = self.field.get_n()
 
         self.eval()
@@ -84,6 +84,7 @@ class MCTSZeroPlayer:
 
         self.search_tree = root
 
+    @np.deprecate(message='We do not use resign value in this project and consider it deprecated.')
     def _get_resign_value(self):
         if self.search_tree is not None:
             value = self.search_tree.value
@@ -94,34 +95,42 @@ class MCTSZeroPlayer:
 
     def _truncate_tree(self, a: int):
         if self.search_tree is not None:
-            if a in list(self.search_tree.children.keys()):
+            if a in self.search_tree.children:
                 self.search_tree = self.search_tree.children[a]
                 self.search_tree.parent = None
             else:
                 self.search_tree = None
 
-    def action(self):
-        """ Returns (A, Pi, V, V_resign, Proba, N_visits). """
-        self._run_search()
-        N, n = self.search_tree.N, self.search_tree.n
-
-        if (not self.deterministic_by_policy) and (self.field.get_depth() <= self.exploration_depth):
-            pi = N ** (1 / self.temperature) / n ** (1 / self.temperature)
-            a = np.random.choice(np.arange(len(N)), p=pi)
+    @staticmethod
+    @nb.njit()
+    def _action(P, N, n, field_shape, exploration_move, t):
+        if exploration_move:
+            t = 1 / t
+            pi = N ** t / n ** t  # np.power returns np.float64 in numba
+            a = choose_idx(weights=pi)
         else:
-            a = np_rand_argmax(N)
-            pi = np.zeros_like(N, dtype=np.float32)
-            pi[a] = 1
+            a = rand_argmax(N)
+            pi = np.zeros_like(N, dtype=np.float64)  # therefore, we need the same type casting
+            pi[a] = 1.
 
-        pi, v, v_resign = np.reshape(pi, (self.n, self.n)), self.search_tree.value, self._get_resign_value()
-        proba = np.reshape(self.search_tree.P, (self.n, self.n))
-        n_visits = np.reshape(self.search_tree.N, (self.n, self.n))
+        pi = np.reshape(pi.astype(np.float32), field_shape)
+        proba = np.reshape(P, field_shape)
+        n_visits = np.reshape(N, field_shape)
+        return a, pi, proba, n_visits
+
+    def action(self):
+        """ Returns (A, Pi, V, Proba, N_visits). """
+        self._run_search()
+        exploration_move = (not self.deterministic_by_policy) and (self.field.get_depth() <= self.exploration_depth)
+        a, pi, proba, n_visits = self._action(self.search_tree.P, self.search_tree.N, self.search_tree.n,
+                                              (self.n, self.n), exploration_move, self.temperature)
+        v = self.search_tree.value
 
         self._make_move(*self.a2ij(a))
         if self.reuse_tree:
             self._truncate_tree(a)
 
-        return a, pi, v, v_resign, proba, n_visits
+        return a, pi, v, proba, n_visits
 
     def on_opponent_action(self, a: int):
         if self.reuse_tree:
@@ -162,27 +171,29 @@ class NodeState:
         self.last_action = None
         self.children = dict()
 
+    @staticmethod
+    @nb.njit()
+    def _set_exploration_proba(p, am, eps: float = 0.25):
+        p = p * (1 - eps) + eps * np.random.dirichlet(np.ones_like(p) * 0.02) * am
+        return p / np.sum(p)
+
     def set_exploration_proba(self, eps: float = None):
         self.eps = eps
         if eps is not None:
             if eps > 0:
-                p_old = np.copy(self.P)
-                self.P *= (1 - eps)
-                self.P += eps * np.random.dirichlet(np.ones_like(self.P) * 0.02) * self.avail_moves
-                self.P /= self.P.sum()
+                p = self._set_exploration_proba(self.P, self.avail_moves, eps=eps)
 
                 am = np.bool_(self.avail_moves)
-                self.U[am] *= self.P[am] / p_old[am]
+                self.U[am] *= p[am] / self.P[am]
+                self.P = p
 
     def expanded(self):
         return len(self.children) > 0
 
     def select(self):
-        # TODO: # the randomized operation is 10 times slower, the resulting MCTS is approx. 1.5 slower in a self-game
-        a = np.argmax(self.Q + self.U)
-        # a = np_rand_argmax(self.Q + self.U)
+        a = rand_argmax(self.Q + self.U)
         self.last_action = a
-        return (a, self.children[a]) if a in list(self.children.keys()) else (a, None)
+        return (a, self.children[a]) if (a in self.children) else (a, None)
 
     def expand(self, a, running_features, model, return_leaf: bool = False):
         self.children[a] = NodeState(self, running_features, model, c_puct=self.c_puct)

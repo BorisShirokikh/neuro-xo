@@ -1,6 +1,7 @@
 deep-pipe
 lazycon
 matplotlib
+numba
 numpy
 pandas
 pygame~=2.1.2

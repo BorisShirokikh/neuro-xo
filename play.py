@@ -22,12 +22,9 @@ def terminate():
 
 
 if __name__ == '__main__':
-    pygame.init()
-    pygame.display.set_caption("Tic-Tac-Toe 10x10")
-
     # ### load agent ###
     # TODO: load model from cloud
-    agent_name = 'zero_v0'
+    agent_name = 'zero_v2'
     agent_path = get_repo_root() / 'agents' / agent_name
 
     config = load_json(agent_path / 'config.json')
@@ -60,6 +57,9 @@ if __name__ == '__main__':
     load_model_state(player.model, agent_path / 'model.pth')
     # ### ########## ###
 
+    pygame.init()
+    pygame.display.set_caption(f"Tic-Tac-Toe {n}x{n}")
+
     player_1, player_2 = np.random.choice([X_ID, O_ID], size=2, replace=False)
     game_over, winner = False, None
 
@@ -88,7 +88,7 @@ if __name__ == '__main__':
 
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_WAIT))
                     a, *out = player.action()
-                    flush(f'>>> [neuro-xo]: Estimated position value = {out[2]:.2f}')
+                    flush(f'>>> [neuro-xo]: Estimated position value = {out[1]:.2f}')
                     flush(f'>>> [neuro-xo]: Move: row {player.a2ij(a)[0] + 1}, col {player.a2ij(a)[1] + 1}.')
                     v = player.field.get_value()
                     pygame.mouse.set_cursor(Cursor(SYSTEM_CURSOR_ARROW))
