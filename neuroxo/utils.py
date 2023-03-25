@@ -31,3 +31,9 @@ def s2hhmmss(s: float):
 
 def n2p_binomial_test(n: int):
     return 1.96 * np.sqrt(0.25 / n) + 0.5
+
+
+def path_mkdir(path, mode=0o777, parents=False, exist_ok=False):
+    path = Path(path)
+    path.mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
+    return path

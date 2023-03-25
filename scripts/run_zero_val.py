@@ -3,7 +3,7 @@ from pathlib import Path
 
 from dpipe.io import choose_existing
 
-from neuroxo.algorithms.zero import run_data_generator
+from neuroxo.algorithms.zero import run_val
 
 
 def main():
@@ -14,6 +14,7 @@ def main():
 
     parser.add_argument('--exp_name', required=True, type=str)
     parser.add_argument('--device', required=False, type=str, default='cuda')
+    parser.add_argument('--preload_best', required=False, action='store_true', default=False)
 
     parser.add_argument('--n', required=False, type=int, default=10)
     parser.add_argument('--k', required=False, type=int, default=5)
@@ -32,9 +33,10 @@ def main():
     parser.add_argument('--deterministic_by_policy', required=False, action='store_true', default=False)
     parser.add_argument('--reduced_search', required=False, action='store_true', default=False)
 
-    parser.add_argument('--n_episodes', required=False, type=int, default=1000)
-
+    parser.add_argument('--n_val_games', required=False, type=int, default=128)  # 100 -> 0.60 wr; 200 -> 0.57 wr
     parser.add_argument('--n_jobs', required=False, type=int, default=1)
+
+    parser.add_argument('--load_config_id', required=False, type=int, default=-1)
 
     args = parser.parse_known_args()[0]
 
@@ -48,7 +50,8 @@ def main():
         Path('/shared/experiments/rl/'),
         Path('/gpfs/gpfs0/b.shirokikh/experiments/rl/'),
     )
-    run_data_generator(args, base_path)
+
+    run_val(args, base_path)
 
 
 if __name__ == '__main__':
